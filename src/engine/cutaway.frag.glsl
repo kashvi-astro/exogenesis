@@ -178,12 +178,13 @@ void main() {
   float bestT = 1e9; int hitType = -1; vec3 hitP = vec3(0.0); vec3 hitN = vec3(0.0);
 
   // A — outer surface (near), valid where not sliced away
+  // (must be a REAL intersection: sS.x < sS.y. A miss returns sS.x huge → skip)
   vec2 sS = raySphere(ro, rd, uRSurface);
-  if (sS.x > 0.0) { vec3 p = ro + rd * sS.x; if (!removed(p)) { bestT = sS.x; hitType = 0; hitP = p; } }
+  if (sS.x > 0.0 && sS.x < sS.y) { vec3 p = ro + rd * sS.x; if (!removed(p)) { bestT = sS.x; hitType = 0; hitP = p; } }
 
   // D — molten core sphere (never sliced)
   vec2 sC = raySphere(ro, rd, uRMantleBase);
-  if (sC.x > 0.0 && sC.x < bestT) { bestT = sC.x; hitType = 3; hitP = ro + rd * sC.x; }
+  if (sC.x > 0.0 && sC.x < sC.y && sC.x < bestT) { bestT = sC.x; hitType = 3; hitP = ro + rd * sC.x; }
 
   // B — wall on x=0 plane (z>0 half), crust+mantle band only
   if (abs(rd.x) > 1e-5) {
