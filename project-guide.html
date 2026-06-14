@@ -1,0 +1,541 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Exoplanet Biosphere Generator — Project Guide</title>
+<style>
+  :root {
+    --bg: #05060f;
+    --bg2: #0a0e23;
+    --panel: rgba(18, 24, 54, 0.55);
+    --panel-solid: #11173a;
+    --line: rgba(120, 150, 255, 0.18);
+    --text: #e8ecff;
+    --muted: #9aa6d4;
+    --accent: #6ea8ff;
+    --accent2: #b388ff;
+    --hot: #ff6b5e;
+    --cold: #5ec8ff;
+    --good: #57e6a5;
+    --warn: #ffd166;
+    --font: "Avenir Next", "Segoe UI", "Helvetica Neue", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    font-family: var(--font);
+    color: var(--text);
+    background: radial-gradient(ellipse at top, #11183f 0%, var(--bg) 55%, #02030a 100%);
+    line-height: 1.65;
+    overflow-x: hidden;
+  }
+  /* Starfield canvas sits behind everything */
+  #stars {
+    position: fixed;
+    inset: 0;
+    z-index: -2;
+    width: 100%;
+    height: 100%;
+  }
+  .glow {
+    position: fixed;
+    z-index: -1;
+    border-radius: 50%;
+    filter: blur(90px);
+    opacity: 0.35;
+    pointer-events: none;
+  }
+  .glow.one { width: 480px; height: 480px; background: #3a5bff; top: -120px; left: -80px; }
+  .glow.two { width: 520px; height: 520px; background: #8b3aff; bottom: -160px; right: -120px; }
+
+  .wrap { max-width: 980px; margin: 0 auto; padding: 0 22px; }
+
+  /* ---------- HERO ---------- */
+  header.hero {
+    min-height: 92vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 60px 22px;
+  }
+  .badge {
+    display: inline-block;
+    font-size: 0.78rem;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    color: var(--accent);
+    border: 1px solid var(--line);
+    border-radius: 100px;
+    padding: 7px 18px;
+    margin-bottom: 28px;
+    background: rgba(110, 168, 255, 0.06);
+  }
+  .hero h1 {
+    font-size: clamp(2.4rem, 6vw, 4.4rem);
+    line-height: 1.05;
+    margin: 0 0 18px;
+    font-weight: 800;
+    background: linear-gradient(120deg, #ffffff 10%, #9ec1ff 50%, #c5a3ff 90%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -1px;
+  }
+  .hero p.tag {
+    font-size: clamp(1rem, 2.4vw, 1.3rem);
+    color: var(--muted);
+    max-width: 620px;
+    margin: 0 auto 36px;
+  }
+  .planet-orb {
+    width: 150px; height: 150px;
+    border-radius: 50%;
+    margin: 10px auto 38px;
+    background:
+      radial-gradient(circle at 32% 30%, #bfe0ff 0%, #5aa0ff 30%, #2456c8 60%, #0a1f5c 100%);
+    box-shadow: 0 0 60px rgba(90, 160, 255, 0.5), inset -18px -10px 40px rgba(0,0,0,0.55);
+    position: relative;
+    animation: float 6s ease-in-out infinite;
+  }
+  .planet-orb::after {
+    content: "";
+    position: absolute; inset: -22px;
+    border-radius: 50%;
+    border: 1px solid rgba(150, 180, 255, 0.25);
+    box-shadow: 0 0 22px rgba(120,160,255,0.15);
+  }
+  @keyframes float { 0%,100%{ transform: translateY(0);} 50%{ transform: translateY(-14px);} }
+  .scroll-hint { color: var(--muted); font-size: 0.85rem; letter-spacing: 2px; margin-top: 10px; animation: blink 2.4s infinite; }
+  @keyframes blink { 0%,100%{opacity:.4;} 50%{opacity:1;} }
+
+  /* ---------- SECTIONS ---------- */
+  section { padding: 70px 0; }
+  .eyebrow {
+    color: var(--accent2);
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    font-size: 0.78rem;
+    font-weight: 700;
+    margin-bottom: 10px;
+  }
+  h2 { font-size: clamp(1.7rem, 4vw, 2.5rem); margin: 0 0 14px; font-weight: 800; letter-spacing: -0.5px; }
+  h3 { font-size: 1.15rem; margin: 0 0 8px; }
+  p.lead { color: var(--muted); font-size: 1.05rem; max-width: 720px; }
+
+  .reveal { opacity: 0; transform: translateY(30px); transition: all 0.7s cubic-bezier(.2,.7,.2,1); }
+  .reveal.in { opacity: 1; transform: none; }
+
+  /* card grids */
+  .grid { display: grid; gap: 18px; margin-top: 28px; }
+  .grid.two { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+  .grid.three { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 22px;
+    backdrop-filter: blur(8px);
+    transition: transform .25s, border-color .25s;
+  }
+  .card:hover { transform: translateY(-4px); border-color: rgba(140,170,255,0.4); }
+  .card .ico { font-size: 1.7rem; margin-bottom: 10px; }
+  .card p { color: var(--muted); margin: 6px 0 0; font-size: 0.95rem; }
+  .pill { display:inline-block; font-size:0.72rem; letter-spacing:1px; text-transform:uppercase; padding:3px 10px; border-radius:100px; margin-bottom:10px;}
+  .pill.solid { background: rgba(87,230,165,0.15); color: var(--good); border:1px solid rgba(87,230,165,0.3);}
+  .pill.est { background: rgba(255,209,102,0.13); color: var(--warn); border:1px solid rgba(255,209,102,0.3);}
+
+  .formula {
+    font-family: "SF Mono", "Consolas", monospace;
+    background: rgba(0,0,0,0.35);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 12px 14px;
+    margin: 12px 0 4px;
+    color: #cfe0ff;
+    font-size: 0.92rem;
+    overflow-x: auto;
+  }
+
+  /* ---------- INTERACTIVE PLAYGROUND ---------- */
+  .lab {
+    background: linear-gradient(160deg, rgba(30,40,90,0.6), rgba(12,16,40,0.6));
+    border: 1px solid var(--line);
+    border-radius: 22px;
+    padding: 30px;
+    margin-top: 30px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 34px;
+  }
+  @media (max-width: 760px){ .lab { grid-template-columns: 1fr; } }
+  .controls label { display:block; font-size:0.9rem; margin: 16px 0 6px; color: var(--text); font-weight:600; }
+  .controls .val { color: var(--accent); font-weight: 700; }
+  input[type=range] {
+    width: 100%; -webkit-appearance:none; height: 6px; border-radius: 6px;
+    background: linear-gradient(90deg, var(--accent), var(--accent2));
+    outline: none;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance:none; width:20px; height:20px; border-radius:50%;
+    background:#fff; cursor:pointer; box-shadow: 0 0 10px rgba(150,180,255,0.9);
+  }
+  select {
+    width:100%; padding:10px 12px; border-radius:10px; margin-top:6px;
+    background: var(--panel-solid); color: var(--text);
+    border:1px solid var(--line); font-family: var(--font); font-size:0.95rem;
+  }
+  .readout { display:flex; flex-direction:column; gap:14px; }
+  .metric {
+    background: rgba(0,0,0,0.3); border:1px solid var(--line); border-radius:14px;
+    padding:16px 18px;
+  }
+  .metric .name { font-size:0.8rem; text-transform:uppercase; letter-spacing:1.5px; color:var(--muted);}
+  .metric .big { font-size:1.8rem; font-weight:800; margin-top:4px; }
+  .metric .sub { font-size:0.85rem; color:var(--muted); margin-top:2px;}
+  .verdict {
+    border-radius:14px; padding:16px 18px; font-weight:700; text-align:center;
+    border:1px solid var(--line); transition: all .3s;
+  }
+  .demo-planet {
+    width: 120px; height:120px; border-radius:50%; margin: 4px auto 18px;
+    box-shadow: inset -16px -10px 36px rgba(0,0,0,0.55), 0 0 40px rgba(90,160,255,0.3);
+    transition: background .4s, box-shadow .4s;
+  }
+
+  /* ---------- TIMELINE ---------- */
+  .timeline { margin-top: 30px; position: relative; padding-left: 26px; }
+  .timeline::before { content:""; position:absolute; left:7px; top:6px; bottom:6px; width:2px; background: linear-gradient(var(--accent), var(--accent2)); }
+  .step { position: relative; margin-bottom: 20px; }
+  .step::before {
+    content:""; position:absolute; left:-26px; top:5px; width:14px; height:14px;
+    border-radius:50%; background: var(--bg); border:3px solid var(--accent);
+  }
+  .step .day { font-size:0.78rem; letter-spacing:1.5px; text-transform:uppercase; color:var(--accent); font-weight:700; }
+  .step .what { font-weight:700; margin: 2px 0; }
+  .step .desc { color: var(--muted); font-size:0.92rem; }
+
+  .callout {
+    border-left: 4px solid var(--warn);
+    background: rgba(255,209,102,0.08);
+    padding: 18px 22px; border-radius: 0 14px 14px 0; margin-top: 26px;
+  }
+  .callout strong { color: var(--warn); }
+
+  footer { text-align:center; padding: 50px 22px 70px; color: var(--muted); font-size:0.9rem; }
+  footer .heart { color: var(--accent2); }
+  a.btn {
+    display:inline-block; margin-top:18px; text-decoration:none; color:#fff;
+    background: linear-gradient(120deg, var(--accent), var(--accent2));
+    padding: 13px 28px; border-radius: 100px; font-weight:700; letter-spacing:0.5px;
+    box-shadow: 0 8px 30px rgba(110,130,255,0.35);
+  }
+</style>
+</head>
+<body>
+<canvas id="stars"></canvas>
+<div class="glow one"></div>
+<div class="glow two"></div>
+
+<!-- HERO -->
+<header class="hero">
+  <span class="badge">A 10-Day Astrophysics Project</span>
+  <div class="planet-orb"></div>
+  <h1>Exoplanet Biosphere<br/>Generator</h1>
+  <p class="tag">Invent a planet. Let physics decide its fate. Then discover what kind of life could call it home.</p>
+  <div class="scroll-hint">↓ SCROLL TO EXPLORE</div>
+</header>
+
+<!-- WHAT IS IT -->
+<section>
+  <div class="wrap reveal">
+    <div class="eyebrow">The Big Idea</div>
+    <h2>What are we building?</h2>
+    <p class="lead">A website where <strong>you design a planet</strong> — its star, size, atmosphere, water, spin, and orbit. The simulator then uses <strong>real physics equations</strong> to predict what that world is actually like: its gravity, temperature, radiation, and whether it could ever hold an atmosphere. Finally, an <strong>AI layer</strong> imagines the alien life that could evolve there — its ecosystems, food chains, and creatures.</p>
+    <div class="grid three">
+      <div class="card"><div class="ico">🪐</div><h3>You design</h3><p>Pick a star type, planet mass, radius, atmosphere, water %, rotation, and distance from the star.</p></div>
+      <div class="card"><div class="ico">📐</div><h3>Physics predicts</h3><p>Gravity, temperature, radiation, atmosphere survival, and a habitability score — all from equations.</p></div>
+      <div class="card"><div class="ico">🌱</div><h3>AI imagines</h3><p>Plausible organisms, food chains, and evolutionary stories — grounded in the physics above.</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- INTERACTIVE PLAYGROUND -->
+<section>
+  <div class="wrap reveal">
+    <div class="eyebrow">Try It Now</div>
+    <h2>A taste of the real physics</h2>
+    <p class="lead">This is a tiny preview of the engine we'll build. Move the sliders and change the star — every number below is computed live from the same formulas the final project will use. 👇</p>
+    <div class="lab">
+      <div class="controls">
+        <div class="demo-planet" id="demoPlanet"></div>
+        <label>Star type: <span class="val" id="starVal">G — Sun-like</span></label>
+        <select id="star">
+          <option value="0.02">M — Red dwarf (cool &amp; dim)</option>
+          <option value="0.3">K — Orange dwarf</option>
+          <option value="1" selected>G — Sun-like (our Sun)</option>
+          <option value="3.5">F — Yellow-white (hot)</option>
+          <option value="20">A — White (very hot)</option>
+        </select>
+        <label>Planet mass: <span class="val"><span id="massVal">1.0</span> × Earth</span></label>
+        <input type="range" id="mass" min="0.1" max="10" step="0.1" value="1" />
+        <label>Planet radius: <span class="val"><span id="radVal">1.0</span> × Earth</span></label>
+        <input type="range" id="rad" min="0.3" max="3" step="0.1" value="1" />
+        <label>Distance from star: <span class="val"><span id="distVal">1.00</span> AU</span></label>
+        <input type="range" id="dist" min="0.1" max="5" step="0.05" value="1" />
+      </div>
+      <div class="readout">
+        <div class="metric">
+          <div class="name">Surface Gravity</div>
+          <div class="big" id="gravity">1.00 g</div>
+          <div class="sub" id="weight">A 50 kg person would weigh 50 kg</div>
+        </div>
+        <div class="metric">
+          <div class="name">Average Temperature</div>
+          <div class="big" id="temp">15 °C</div>
+          <div class="sub" id="tempK">288 K · equilibrium estimate</div>
+        </div>
+        <div class="metric">
+          <div class="name">Escape Velocity</div>
+          <div class="big" id="esc">11.2 km/s</div>
+          <div class="sub">How fast you'd need to go to leave — hints if it can keep an atmosphere</div>
+        </div>
+        <div class="verdict" id="verdict">🌍 Potentially habitable</div>
+      </div>
+    </div>
+    <p class="lead" style="margin-top:14px; font-size:0.9rem;">⚠️ Star luminosities here are rounded, representative values just for this preview — the real project will use more precise data.</p>
+  </div>
+</section>
+
+<!-- PHYSICS ENGINE -->
+<section>
+  <div class="wrap reveal">
+    <div class="eyebrow">Layer 1 · The Rigorous Core</div>
+    <h2>The Physics Engine</h2>
+    <p class="lead">Every output comes from a real equation you can explain and defend. This is the part that proves you're a physicist.</p>
+    <div class="grid two">
+      <div class="card">
+        <span class="pill solid">Solid Physics</span>
+        <h3>⚖️ Surface Gravity</h3>
+        <div class="formula">g = g₀ × (Mass ÷ Radius²)</div>
+        <p>Heavier planet → stronger pull. Bigger radius → weaker pull at the surface. Tells you how much you'd weigh.</p>
+      </div>
+      <div class="card">
+        <span class="pill solid">Solid Physics</span>
+        <h3>🌡️ Equilibrium Temperature</h3>
+        <div class="formula">T = 278 × L^¼ × dist^−½ × (1−albedo)^¼</div>
+        <p>Balances the starlight coming in against the heat the planet radiates away. Brighter star or closer orbit → hotter.</p>
+      </div>
+      <div class="card">
+        <span class="pill solid">Solid Physics</span>
+        <h3>🌊 Cosmic Shoreline</h3>
+        <div class="formula">escape velocity  vs.  stellar radiation</div>
+        <p>The clever bit: does the planet's gravity win against the star stripping its air? Decides "keeps atmosphere" vs. "bare rock."</p>
+      </div>
+      <div class="card">
+        <span class="pill est">Refined Estimate</span>
+        <h3>♨️ Greenhouse Boost</h3>
+        <div class="formula">surface T = equilibrium T + greenhouse warming</div>
+        <p>CO₂, water vapour and methane trap heat. Earth would be −18 °C without it! Too much → runaway, Venus-style.</p>
+      </div>
+      <div class="card">
+        <span class="pill est">Proxy Index</span>
+        <h3>☢️ Radiation Level</h3>
+        <div class="formula">based on star type + distance</div>
+        <p>Red dwarfs flare violently; closer orbits get blasted. A physically-motivated score, not an exact number.</p>
+      </div>
+      <div class="card">
+        <span class="pill solid">Scoring</span>
+        <h3>🎯 Habitability Score</h3>
+        <div class="formula">liquid water? + gravity? + atmosphere? + stable?</div>
+        <p>Combines everything into one 0–100 headline number with a clear verdict.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- AI LAYER -->
+<section>
+  <div class="wrap reveal">
+    <div class="eyebrow">Layer 2 · The Creative Payoff</div>
+    <h2>The Biosphere Generator</h2>
+    <p class="lead">Here the physics turns into biology. First <strong>your rules engine</strong> reasons from the conditions; then <strong>AI</strong> brings it to life with vivid creatures, food chains, and evolutionary stories.</p>
+    <div class="grid two">
+      <div class="card">
+        <h3>🧠 Your Rules (the science)</h3>
+        <p>Logic <em>you</em> design, e.g.:<br/>
+        • Too cold for surface water → life goes underground<br/>
+        • Red dwarf star → plants are black/red, not green<br/>
+        • High gravity → short, strong, squat organisms<br/>
+        • No oxygen → chemosynthesis near vents</p>
+      </div>
+      <div class="card">
+        <h3>✨ The AI (the imagination)</h3>
+        <p>Takes your rules' conclusions and writes the world up — naming organisms, sketching a food chain, telling an evolutionary story. The <em>logic</em> is yours; the AI just makes it sing.</p>
+      </div>
+    </div>
+    <div class="card" style="margin-top:18px;">
+      <h3>🔬 Worked example</h3>
+      <p style="color:var(--text)"><strong>Planet:</strong> 50% methane, 20% nitrogen, orbiting a red dwarf.</p>
+      <p><strong>Reasoning:</strong> Red dwarf light is dim &amp; red → photosynthesis is possible but uses dark red/black pigments. A methane-rich, oxygen-poor air points to <em>chemosynthesis</em> near geothermal vents. <strong>Result:</strong> "Expect chemosynthetic microbial mats underground, and dark photosynthetic life clinging to the surface near warmth."</p>
+    </div>
+  </div>
+</section>
+
+<!-- HONESTY CALLOUT -->
+<section style="padding-top:10px;">
+  <div class="wrap reveal">
+    <div class="callout">
+      <strong>⚠️ Our guiding principle: scientific honesty.</strong>
+      <p style="margin:8px 0 0; color:var(--text)">The biology layer is informed <em>speculation</em>, never a prediction. Real scientists know that even "signs of life" like oxygen or methane can be made <em>without</em> life. So our app will always say <em>"these conditions could support X"</em> — never "life detected." Being honest about uncertainty is what makes a project look mature, not less impressive.</p>
+    </div>
+  </div>
+</section>
+
+<!-- BUILD PLAN -->
+<section>
+  <div class="wrap reveal">
+    <div class="eyebrow">The Journey</div>
+    <h2>Our 10-Day Build Plan</h2>
+    <p class="lead">We build in layers, so there's always something working to show. The later features are "stretch goals" — you'll never be left with something broken.</p>
+    <div class="timeline">
+      <div class="step"><div class="day">Day 1</div><div class="what">Set up your tools</div><div class="desc">Get a code editor and project folder ready; put a first page on screen.</div></div>
+      <div class="step"><div class="day">Day 2</div><div class="what">The input panel</div><div class="desc">Sliders and the star-type picker — your planet's control deck.</div></div>
+      <div class="step"><div class="day">Days 3–4</div><div class="what">The physics engine</div><div class="desc">Gravity, temperature, escape velocity, cosmic shoreline, greenhouse.</div></div>
+      <div class="step"><div class="day">Day 5</div><div class="what">Habitability score &amp; gauges</div><div class="desc">Turn numbers into dials and a headline verdict.</div></div>
+      <div class="step"><div class="day">Day 6</div><div class="what">The reactive planet</div><div class="desc">A world that changes colour, clouds and ice as you tweak it.</div></div>
+      <div class="step"><div class="day">Day 7</div><div class="what">The rules engine</div><div class="desc">Your science — turning physics into biology logic.</div></div>
+      <div class="step"><div class="day">Day 8</div><div class="what">Connect the AI</div><div class="desc">Hook up the Claude API for the creative biosphere writeup.</div></div>
+      <div class="step"><div class="day">Day 9</div><div class="what">Polish</div><div class="desc">The dark space theme and the "field report" reveal.</div></div>
+      <div class="step"><div class="day">Day 10</div><div class="what">Launch 🚀</div><div class="desc">Deploy online, write up your methods, take screenshots.</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- STACK -->
+<section>
+  <div class="wrap reveal">
+    <div class="eyebrow">How It's Made</div>
+    <h2>The toolkit</h2>
+    <div class="grid three">
+      <div class="card"><div class="ico">🌐</div><h3>HTML · CSS · JavaScript</h3><p>Plain web files you can read and understand — no confusing frameworks.</p></div>
+      <div class="card"><div class="ico">🤖</div><h3>Claude API</h3><p>The real AI that generates each planet's living world.</p></div>
+      <div class="card"><div class="ico">▲</div><h3>Vercel</h3><p>Free hosting that gives your project a real, shareable web link.</p></div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>Exoplanet Biosphere Generator — a project guide built to learn from.</p>
+    <p>Designed for <strong>Kashvi</strong> · Class XII Physics <span class="heart">★</span></p>
+    <a class="btn" href="#" onclick="window.scrollTo({top:0,behavior:'smooth'});return false;">Back to top ↑</a>
+  </div>
+</footer>
+
+<script>
+/* ---------- Starfield ---------- */
+const canvas = document.getElementById('stars');
+const ctx = canvas.getContext('2d');
+let stars = [];
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+  stars = Array.from({length: 160}, () => ({
+    x: Math.random() * canvas.width,
+    y: Math.random() * canvas.height,
+    r: Math.random() * 1.4 + 0.2,
+    tw: Math.random() * 0.05 + 0.01,
+    p: Math.random() * Math.PI * 2
+  }));
+}
+window.addEventListener('resize', resize);
+resize();
+function drawStars() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  for (const s of stars) {
+    s.p += s.tw;
+    const alpha = 0.5 + Math.sin(s.p) * 0.5;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#cfe0ff';
+    ctx.beginPath();
+    ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  requestAnimationFrame(drawStars);
+}
+drawStars();
+
+/* ---------- Reveal on scroll ---------- */
+const io = new IntersectionObserver((entries) => {
+  entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('in'); });
+}, { threshold: 0.15 });
+document.querySelectorAll('.reveal').forEach(el => io.observe(el));
+
+/* ---------- Live physics playground ---------- */
+const $ = id => document.getElementById(id);
+const starNames = {
+  '0.02': 'M — Red dwarf', '0.3': 'K — Orange dwarf', '1': 'G — Sun-like',
+  '3.5': 'F — Yellow-white', '20': 'A — White'
+};
+
+function compute() {
+  const L = parseFloat($('star').value);      // luminosity in Sun units
+  const M = parseFloat($('mass').value);       // Earth masses
+  const R = parseFloat($('rad').value);        // Earth radii
+  const d = parseFloat($('dist').value);       // AU
+  const albedo = 0.3;
+
+  // Surface gravity in g (Earth = 1)
+  const g = M / (R * R);
+  // Escape velocity: Earth = 11.186 km/s, scales as sqrt(M/R)
+  const esc = 11.186 * Math.sqrt(M / R);
+  // Equilibrium temperature in Kelvin
+  const Teq = 278.5 * Math.pow(L, 0.25) * Math.pow(d, -0.5) * Math.pow(1 - albedo, 0.25);
+  const Tc = Teq - 273.15;
+
+  // Update labels
+  $('starVal').textContent = starNames[$('star').value];
+  $('massVal').textContent = M.toFixed(1);
+  $('radVal').textContent = R.toFixed(1);
+  $('distVal').textContent = d.toFixed(2);
+
+  $('gravity').textContent = g.toFixed(2) + ' g';
+  $('weight').textContent = 'A 50 kg person would weigh ' + Math.round(50 * g) + ' kg here';
+  $('temp').textContent = Math.round(Tc) + ' °C';
+  $('tempK').textContent = Math.round(Teq) + ' K · equilibrium estimate';
+  $('esc').textContent = esc.toFixed(1) + ' km/s';
+
+  // Planet colour reacts to temperature
+  let col;
+  if (Teq < 200) col = 'radial-gradient(circle at 32% 30%, #eaf4ff, #aac8ff 40%, #6f88c0 100%)'; // icy
+  else if (Teq < 320) col = 'radial-gradient(circle at 32% 30%, #bfe0ff, #4f9bff 45%, #14406b 100%)'; // temperate blue
+  else if (Teq < 500) col = 'radial-gradient(circle at 32% 30%, #ffd9a8, #e08a3c 45%, #7a3310 100%)'; // warm/desert
+  else col = 'radial-gradient(circle at 32% 30%, #ffd0a0, #ff5e3a 40%, #7a1500 100%)'; // molten
+  $('demoPlanet').style.background = col;
+
+  // Verdict
+  const v = $('verdict');
+  let txt, bg, color;
+  if (Teq >= 273 && Teq <= 320 && g >= 0.4 && g <= 2.5 && esc > 7) {
+    txt = '🌍 Potentially habitable — liquid water possible!'; bg = 'rgba(87,230,165,0.15)'; color = 'var(--good)';
+  } else if (Teq < 273) {
+    txt = '❄️ Too cold — a frozen world'; bg = 'rgba(94,200,255,0.12)'; color = 'var(--cold)';
+  } else if (Teq > 320) {
+    txt = '🔥 Too hot — water would boil away'; bg = 'rgba(255,107,94,0.13)'; color = 'var(--hot)';
+  } else if (esc <= 7) {
+    txt = '💨 Gravity too weak — atmosphere likely lost'; bg = 'rgba(255,209,102,0.12)'; color = 'var(--warn)';
+  } else {
+    txt = '⚠️ Harsh — gravity outside the comfort range'; bg = 'rgba(255,209,102,0.12)'; color = 'var(--warn)';
+  }
+  v.textContent = txt; v.style.background = bg; v.style.color = color;
+}
+['star','mass','rad','dist'].forEach(id => $(id).addEventListener('input', compute));
+compute();
+</script>
+</body>
+</html>

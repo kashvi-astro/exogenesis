@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<!--
+  index.html — the STRUCTURE of your app (the skeleton).
+  HTML says WHAT is on the page. Style lives in css/style.css,
+  behaviour lives in js/main.js. Three files, three clear jobs.
+-->
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Exogenesis · Biosphere Generator</title>
+  <meta name="description" content="Design an exoplanet and explore the biosphere it could support — a scientifically grounded model of planetary conditions and the speculative life they might sustain. Part of Exogenesis." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='11' fill='%232fc4ad'/><circle cx='12' cy='12' r='3' fill='%23bff3ea'/></svg>" />
+
+  <!-- A technical typeface used widely in science & engineering.
+       If you're offline it quietly falls back to your system font. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Connect our STYLE file -->
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+
+<body>
+  <!-- Faint star layer, drawn by JavaScript -->
+  <canvas id="stars"></canvas>
+
+  <!-- ===== Site bar (ties the tool back to Exogenesis) ===== -->
+  <nav class="site-nav">
+    <a class="site-logo" href="https://exogenesis.in">EXOGENESIS</a>
+    <a class="site-back" href="https://exogenesis.in">← Back to Exogenesis</a>
+  </nav>
+
+  <!-- ===== Header ===== -->
+  <header class="topbar">
+    <span class="eyebrow">Exoplanetary Habitability Model</span>
+    <h1 class="title">Exoplanet Biosphere Generator</h1>
+    <p class="subtitle">A first-principles model of planetary conditions and the biospheres they could sustain.</p>
+    <p id="status" class="status">initialising model…</p>
+  </header>
+
+  <!-- ===== Main work area ===== -->
+  <main class="layout">
+
+    <!-- LEFT PANEL: the parameters the user sets -->
+    <section class="panel">
+      <div class="panel-head"><span class="idx">01</span><h2>Input Parameters</h2></div>
+
+      <!-- Host star -->
+      <div class="control">
+        <label for="star">Host star type</label>
+        <select id="star">
+          <option value="M">M — Red dwarf (cool, dim)</option>
+          <option value="K">K — Orange dwarf</option>
+          <option value="G" selected>G — Sun-like</option>
+          <option value="F">F — Yellow-white (hot)</option>
+          <option value="A">A — White (very hot)</option>
+        </select>
+      </div>
+
+      <!-- Mass (M⊕ = Earth masses) -->
+      <div class="control">
+        <label for="mass">Planetary mass
+          <span class="value"><span id="massVal">1.0</span> M⊕</span></label>
+        <input type="range" id="mass" min="0.1" max="10" step="0.1" value="1" />
+      </div>
+
+      <!-- Radius (R⊕ = Earth radii) -->
+      <div class="control">
+        <label for="radius">Planetary radius
+          <span class="value"><span id="radiusVal">1.0</span> R⊕</span></label>
+        <input type="range" id="radius" min="0.3" max="3" step="0.1" value="1" />
+      </div>
+
+      <!-- Orbital distance (AU = Earth–Sun distance) -->
+      <div class="control">
+        <label for="dist">Orbital distance
+          <span class="value"><span id="distVal">1.00</span> AU</span></label>
+        <input type="range" id="dist" min="0.1" max="5" step="0.05" value="1" />
+      </div>
+
+      <!-- Rotation period -->
+      <div class="control">
+        <label for="rotation">Rotation period
+          <span class="value"><span id="rotationVal">24</span> h</span></label>
+        <input type="range" id="rotation" min="1" max="2000" step="1" value="24" />
+      </div>
+
+      <!-- Surface water coverage -->
+      <div class="control">
+        <label for="water">Surface water coverage
+          <span class="value"><span id="waterVal">71</span> %</span></label>
+        <input type="range" id="water" min="0" max="100" step="1" value="71" />
+      </div>
+
+      <!-- Atmospheric composition -->
+      <h3 class="subhead">Atmospheric Composition</h3>
+      <p class="hint">Mole fraction of each gas. Aim for a sum near 100%.</p>
+
+      <div class="control gas">
+        <label for="gasN2"><span class="gas-name"><i class="gdot" style="--d:var(--gas-n2)"></i>Nitrogen · N₂</span>
+          <span class="value"><span id="gasN2Val">78</span> %</span></label>
+        <input type="range" id="gasN2" min="0" max="100" step="1" value="78" />
+      </div>
+      <div class="control gas">
+        <label for="gasO2"><span class="gas-name"><i class="gdot" style="--d:var(--gas-o2)"></i>Oxygen · O₂</span>
+          <span class="value"><span id="gasO2Val">21</span> %</span></label>
+        <input type="range" id="gasO2" min="0" max="100" step="1" value="21" />
+      </div>
+      <div class="control gas">
+        <label for="gasCO2"><span class="gas-name"><i class="gdot" style="--d:var(--gas-co2)"></i>Carbon dioxide · CO₂</span>
+          <span class="value"><span id="gasCO2Val">0</span> %</span></label>
+        <input type="range" id="gasCO2" min="0" max="100" step="1" value="0" />
+      </div>
+      <div class="control gas">
+        <label for="gasCH4"><span class="gas-name"><i class="gdot" style="--d:var(--gas-ch4)"></i>Methane · CH₄</span>
+          <span class="value"><span id="gasCH4Val">0</span> %</span></label>
+        <input type="range" id="gasCH4" min="0" max="100" step="1" value="0" />
+      </div>
+      <div class="control gas">
+        <label for="gasH2"><span class="gas-name"><i class="gdot" style="--d:var(--gas-h2)"></i>Hydrogen · H₂</span>
+          <span class="value"><span id="gasH2Val">0</span> %</span></label>
+        <input type="range" id="gasH2" min="0" max="100" step="1" value="0" />
+      </div>
+      <div class="control gas">
+        <label for="gasH2O"><span class="gas-name"><i class="gdot" style="--d:var(--gas-h2o)"></i>Water vapour · H₂O</span>
+          <span class="value"><span id="gasH2OVal">1</span> %</span></label>
+        <input type="range" id="gasH2O" min="0" max="100" step="1" value="1" />
+      </div>
+
+      <div class="atmo-total" id="atmoTotalBox">
+        <span>Σ composition</span><span><span id="atmoTotal">100</span> %</span>
+      </div>
+    </section>
+
+    <!-- CENTRE: the real-time 3D planet (Three.js), rendered live from the physics -->
+    <div class="planet-stage">
+      <div class="planet3d" id="planet3d"></div>
+      <div class="planet-caption" id="planetCaption">—</div>
+      <div class="planet-card" id="planetCard"></div>
+      <div class="analog-card" id="analogCard"></div>
+    </div>
+
+    <!-- RIGHT PANEL: live echo of the parameters (proves JS reads them).
+         Real derived physics arrives on Day 3. -->
+    <section class="panel">
+      <div class="panel-head"><span class="idx">02</span><h2>Derived Quantities</h2></div>
+
+      <!-- The headline habitability gauge (built by JavaScript) -->
+      <div id="habitability"></div>
+
+      <p class="hint">Computed from the parameters via physical equations:</p>
+      <div class="metrics" id="metrics"></div>
+      <p class="note">Assumes a bond albedo A = 0.30 (Earth-like reflectivity). Items tagged <em>rigorous</em> come straight from standard equations; <em>estimate</em> items (radiation, atmosphere retention, greenhouse) use simplified proxy models. The combined habitability index arrives on Day 5.</p>
+    </section>
+  </main>
+
+  <!-- ===== Biosphere Assessment (the rules engine's output) ===== -->
+  <section class="biosphere">
+    <div class="bio-inner">
+      <div class="panel-head"><span class="idx">03</span><h2>Biosphere Assessment</h2></div>
+      <p class="bio-disclaimer">Speculative — inferred from physical conditions, not an observation. This describes what life <em>could</em> be possible, never what exists.</p>
+      <div class="bio-summary" id="bioSummary"></div>
+      <div class="bio-findings" id="bioFindings"></div>
+
+      <h3 class="bio-subhead">Inferred food chain</h3>
+      <p class="hint">Silhouettes are generated from the physics — body shape from gravity, colour from the star &amp; energy source. Generic roles for now; the AI will name the organisms next.</p>
+      <div class="eco-chain" id="ecosystem"></div>
+
+      <h3 class="bio-subhead">Artist's impressions</h3>
+      <p class="note"><strong>AI illustrations activate after deployment.</strong> Generating images needs a small server (to keep the key safe and get around browser security limits), so this feature switches on once the project is published online. Until then, the physics-driven food chain above is the working visual.</p>
+
+      <h3 class="bio-subhead">Field report</h3>
+      <p class="hint">A written synthesis of the assessment above. Generated from the rules engine now; an AI-written version plugs in once an API key is connected.</p>
+      <button class="report-btn" id="reportBtn">Generate field report</button>
+      <div class="field-report" id="fieldReport"></div>
+
+      <p class="note">Next: connect the Claude API for richer AI prose, then add AI-illustrated organisms (labelled "artistic impression").</p>
+    </div>
+  </section>
+
+  <footer class="foot">
+    © 2026 Exogenesis · Biosphere Generator by Kashvi Arora<br />
+    Real-planet data courtesy of the NASA Exoplanet Archive, operated by Caltech/IPAC under contract with NASA.
+  </footer>
+
+  <!-- Connect our code. physics.js (equations) and planet.js (the visual)
+       load first so main.js can use them. -->
+  <!-- Three.js: the 3D library that powers the real-time planet render -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <script src="js/physics.js"></script>
+  <script src="js/planet3d.js"></script>
+  <script src="js/rules.js"></script>
+  <script src="js/visuals.js"></script>
+  <script src="js/report.js"></script>
+  <script src="js/exoplanets.js"></script>
+  <script src="js/images.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

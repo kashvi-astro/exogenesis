@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Exoplanet Project — Dashboard</title>
+<style>
+  :root {
+    --bg: #05060f;
+    --panel: rgba(18, 24, 54, 0.55);
+    --panel-solid: #11173a;
+    --line: rgba(120, 150, 255, 0.18);
+    --text: #e8ecff;
+    --muted: #9aa6d4;
+    --accent: #6ea8ff;
+    --accent2: #b388ff;
+    --done: #57e6a5;
+    --doing: #ffd166;
+    --todo: #7d89b8;
+    --font: "Avenir Next", "Segoe UI", "Helvetica Neue", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0; font-family: var(--font); color: var(--text);
+    background: radial-gradient(ellipse at top, #11183f 0%, var(--bg) 55%, #02030a 100%);
+    line-height: 1.6; min-height: 100vh; overflow-x: hidden;
+  }
+  #stars { position: fixed; inset: 0; z-index: -2; }
+  .glow { position: fixed; z-index: -1; border-radius: 50%; filter: blur(90px); opacity: 0.32; pointer-events: none; }
+  .glow.one { width: 460px; height: 460px; background: #3a5bff; top: -120px; left: -80px; }
+  .glow.two { width: 500px; height: 500px; background: #8b3aff; bottom: -160px; right: -120px; }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 0 22px; }
+
+  header.top { text-align: center; padding: 54px 22px 10px; }
+  .badge { display:inline-block; font-size:0.74rem; letter-spacing:3px; text-transform:uppercase;
+    color: var(--accent); border:1px solid var(--line); border-radius:100px; padding:6px 16px; margin-bottom:18px;
+    background: rgba(110,168,255,0.06); }
+  header.top h1 { font-size: clamp(2rem, 5vw, 3.2rem); margin:0 0 8px; font-weight:800; letter-spacing:-1px;
+    background: linear-gradient(120deg,#fff 10%,#9ec1ff 55%,#c5a3ff 95%);
+    -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent; }
+  header.top p { color: var(--muted); margin:0; }
+
+  /* tabs */
+  .tabs { display:flex; gap:10px; justify-content:center; margin:30px 0 10px; flex-wrap:wrap; }
+  .tab { cursor:pointer; border:1px solid var(--line); background:var(--panel); color:var(--text);
+    padding:11px 22px; border-radius:100px; font-weight:700; font-size:0.95rem; transition:all .25s; backdrop-filter:blur(6px); }
+  .tab:hover { border-color: rgba(140,170,255,0.45); }
+  .tab.active { background: linear-gradient(120deg,var(--accent),var(--accent2)); border-color:transparent;
+    box-shadow:0 6px 24px rgba(110,130,255,0.35); }
+
+  .view { display:none; padding: 24px 0 70px; }
+  .view.active { display:block; animation: fade .5s ease; }
+  @keyframes fade { from{opacity:0; transform:translateY(14px);} to{opacity:1; transform:none;} }
+
+  /* ---------- DIARY ---------- */
+  .diary-day { margin-bottom: 30px; }
+  .diary-day .dhead { display:flex; align-items:baseline; gap:12px; margin-bottom:6px; flex-wrap:wrap; }
+  .diary-day .dnum { font-size:0.76rem; letter-spacing:2px; text-transform:uppercase; color:var(--accent);
+    border:1px solid var(--line); padding:4px 12px; border-radius:100px; font-weight:700; }
+  .diary-day .ddate { color:var(--muted); font-size:0.9rem; }
+  .diary-day h3 { margin:6px 0 14px; font-size:1.3rem; }
+  .entry { background:var(--panel); border:1px solid var(--line); border-radius:14px; padding:16px 18px;
+    margin-bottom:12px; backdrop-filter:blur(8px); transition: transform .2s, border-color .2s; }
+  .entry:hover { transform: translateX(4px); border-color: rgba(140,170,255,0.4); }
+  .entry .etitle { font-weight:700; display:flex; align-items:center; gap:9px; }
+  .entry .etitle .ico { font-size:1.15rem; }
+  .entry p { margin:6px 0 0; color:var(--muted); font-size:0.94rem; }
+  .entry .file { display:inline-block; margin-top:8px; font-family:"SF Mono",Consolas,monospace; font-size:0.8rem;
+    color:#bcd2ff; background:rgba(0,0,0,0.35); border:1px solid var(--line); padding:3px 9px; border-radius:7px; }
+
+  /* ---------- CHECKLIST ---------- */
+  .progress-card { background:var(--panel); border:1px solid var(--line); border-radius:18px; padding:22px;
+    margin-bottom:22px; backdrop-filter:blur(8px); display:flex; align-items:center; gap:22px; flex-wrap:wrap; }
+  .ring { --p:0; width:92px; height:92px; border-radius:50%; flex-shrink:0;
+    background: conic-gradient(var(--done) calc(var(--p)*1%), rgba(255,255,255,0.08) 0);
+    display:flex; align-items:center; justify-content:center; }
+  .ring .inner { width:70px; height:70px; border-radius:50%; background:var(--panel-solid);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; }
+  .ring .pct { font-size:1.3rem; font-weight:800; line-height:1; }
+  .ring .lbl { font-size:0.6rem; letter-spacing:1px; color:var(--muted); text-transform:uppercase; }
+  .progress-card .ptext h3 { margin:0 0 4px; }
+  .progress-card .ptext p { margin:0; color:var(--muted); font-size:0.92rem; }
+  .stat-row { display:flex; gap:18px; margin-top:8px; flex-wrap:wrap; }
+  .stat-row span { font-size:0.85rem; color:var(--muted); }
+  .stat-row b { color:var(--text); }
+  .dot { display:inline-block; width:9px; height:9px; border-radius:50%; margin-right:5px; vertical-align:middle; }
+
+  .filters { display:flex; gap:8px; margin-bottom:18px; flex-wrap:wrap; }
+  .filter { cursor:pointer; font-size:0.84rem; padding:7px 14px; border-radius:100px; border:1px solid var(--line);
+    background:transparent; color:var(--muted); transition:all .2s; }
+  .filter:hover { color:var(--text); }
+  .filter.active { background:var(--panel); color:var(--text); border-color:rgba(140,170,255,0.45); }
+
+  .group { margin-bottom:24px; }
+  .group h4 { font-size:0.8rem; letter-spacing:2px; text-transform:uppercase; color:var(--accent2);
+    margin:0 0 12px; font-weight:700; }
+  .task { display:flex; align-items:flex-start; gap:13px; background:var(--panel); border:1px solid var(--line);
+    border-radius:12px; padding:13px 15px; margin-bottom:9px; cursor:pointer; transition:all .2s; backdrop-filter:blur(6px); }
+  .task:hover { border-color:rgba(140,170,255,0.4); transform:translateY(-2px); }
+  .task .box { width:22px; height:22px; border-radius:7px; flex-shrink:0; margin-top:1px;
+    border:2px solid var(--todo); display:flex; align-items:center; justify-content:center; font-size:0.85rem; transition:all .2s; }
+  .task .body { flex:1; }
+  .task .tlabel { font-weight:600; transition: all .2s; }
+  .task .tmeta { font-size:0.82rem; color:var(--muted); margin-top:2px; }
+  .task .chip { font-size:0.68rem; letter-spacing:1px; text-transform:uppercase; padding:3px 9px; border-radius:100px;
+    font-weight:700; white-space:nowrap; align-self:center; }
+
+  .task[data-s="done"] .box { background:var(--done); border-color:var(--done); color:#04221a; }
+  .task[data-s="done"] .tlabel { text-decoration: line-through; color: var(--muted); }
+  .task[data-s="done"] .chip { background:rgba(87,230,165,0.15); color:var(--done); }
+  .task[data-s="doing"] .box { border-color:var(--doing); color:var(--doing); }
+  .task[data-s="doing"] .chip { background:rgba(255,209,102,0.15); color:var(--doing); }
+  .task[data-s="todo"] .chip { background:rgba(125,137,184,0.15); color:var(--todo); }
+
+  .hint { text-align:center; color:var(--muted); font-size:0.85rem; margin: 8px 0 0; }
+  .reset { display:block; margin: 26px auto 0; cursor:pointer; background:transparent; border:1px solid var(--line);
+    color:var(--muted); padding:8px 18px; border-radius:100px; font-size:0.82rem; }
+  .reset:hover { color:var(--text); border-color:rgba(140,170,255,0.45); }
+  footer { text-align:center; color:var(--muted); font-size:0.85rem; padding:0 22px 60px; }
+</style>
+</head>
+<body>
+<canvas id="stars"></canvas>
+<div class="glow one"></div>
+<div class="glow two"></div>
+
+<header class="top">
+  <span class="badge">Mission Control</span>
+  <h1>Project Dashboard</h1>
+  <p>Exoplanet Biosphere Generator · Kashvi · Class XII Physics</p>
+  <div class="tabs">
+    <div class="tab active" data-view="diary">📔 Working Diary</div>
+    <div class="tab" data-view="check">✅ Checklist</div>
+  </div>
+</header>
+
+<!-- ===================== DIARY ===================== -->
+<div class="view active wrap" id="diary">
+
+  <div class="diary-day">
+    <div class="dhead">
+      <span class="dnum">Day 1</span>
+      <span class="ddate">Sunday, 8 June 2026</span>
+    </div>
+    <h3>💡 The project is born</h3>
+    <div class="entry">
+      <div class="etitle"><span class="ico">🚀</span> Defined the concept</div>
+      <p>Settled on the idea: an <strong>Exoplanet Biosphere Generator</strong> — design a planet, let physics predict its conditions, then let AI imagine the life that could evolve there. Goal: a 10-day astrophysics project that shows real interest and hard work.</p>
+    </div>
+    <div class="entry">
+      <div class="etitle"><span class="ico">🔍</span> Reviewed the idea &amp; got feedback</div>
+      <p>Confirmed it's a strong concept. Key feedback: <strong>separate the rigorous physics from the speculative biology</strong>, and stay scientifically honest. Refined the methane / red-dwarf example (photosynthesis isn't impossible — it would just use red/black pigments).</p>
+    </div>
+    <div class="entry">
+      <div class="etitle"><span class="ico">🎯</span> Set scope &amp; success criteria</div>
+      <p>Agreed the project should be a polished, shareable <strong>portfolio website</strong> — visually impressive and scientifically defensible.</p>
+    </div>
+  </div>
+
+  <div class="diary-day">
+    <div class="dhead">
+      <span class="dnum">Day 2</span>
+      <span class="ddate">Monday, 9 June 2026</span>
+    </div>
+    <h3>🧭 Plan, research &amp; first build</h3>
+    <div class="entry">
+      <div class="etitle"><span class="ico">⚙️</span> Calibrated the approach</div>
+      <p>Decided: new to coding → I scaffold and teach each step; use the <strong>real Claude API</strong> for the AI layer; ship as a deployable portfolio site. Flagged that the API key must stay secret (handled via a small secure helper) and that Saurabh can help with the key + small budget.</p>
+    </div>
+    <div class="entry">
+      <div class="etitle"><span class="ico">🧱</span> Locked the tech stack</div>
+      <p>Plain <strong>HTML · CSS · JavaScript</strong> (readable, no heavy frameworks), <strong>Claude API</strong> for the biosphere, and <strong>Vercel</strong> for free hosting with a real shareable link.</p>
+    </div>
+    <div class="entry">
+      <div class="etitle"><span class="ico">🗺️</span> Created the 10-day build plan</div>
+      <p>Mapped out each day from tools setup → input panel → physics engine → habitability score → reactive planet → rules engine → AI hookup → polish → launch.</p>
+    </div>
+    <div class="entry">
+      <div class="etitle"><span class="ico">📺</span> Researched a real astrophysics lecture</div>
+      <p>Read &amp; analysed a Stanford "Intro to Astro" lecture on exoplanet atmospheres. Extracted key learnings: the <strong>equilibrium temperature</strong> formula (validated our plan), the <strong>Cosmic Shoreline</strong> for atmosphere retention, the <strong>greenhouse effect</strong>, and the vital lesson that <strong>biosignatures can be faked</strong> — reinforcing scientific honesty.</p>
+      <span class="file">Intro2Astro Exoplanet Atmosphere.txt</span>
+    </div>
+    <div class="entry">
+      <div class="etitle"><span class="ico">🌐</span> Built the interactive Project Guide</div>
+      <p>Created an animated explainer site with a starfield, a <strong>live physics playground</strong> (sliders that compute real gravity, temperature &amp; escape velocity), and full explanations of all three project layers.</p>
+      <span class="file">project-guide.html</span>
+    </div>
+    <div class="entry">
+      <div class="etitle"><span class="ico">📔</span> Built this Project Dashboard</div>
+      <p>Created the working diary + interactive checklist you're reading now, to track the whole journey.</p>
+      <span class="file">project-dashboard.html</span>
+    </div>
+  </div>
+
+  <p class="hint">More entries will be added as we build. Day 1 of the actual build (setting up your tools) is up next! 🛠️</p>
+</div>
+
+<!-- ===================== CHECKLIST ===================== -->
+<div class="view wrap" id="check">
+
+  <div class="progress-card">
+    <div class="ring" id="ring"><div class="inner"><span class="pct" id="pct">0%</span><span class="lbl">Done</span></div></div>
+    <div class="ptext">
+      <h3>Overall progress</h3>
+      <p>Tap any task to cycle it: <b>⏳ Pending → 🔄 In progress → ✅ Done</b>. Your progress is saved in this browser.</p>
+      <div class="stat-row">
+        <span><span class="dot" style="background:var(--done)"></span><b id="cDone">0</b> done</span>
+        <span><span class="dot" style="background:var(--doing)"></span><b id="cDoing">0</b> in progress</span>
+        <span><span class="dot" style="background:var(--todo)"></span><b id="cTodo">0</b> pending</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="filters" id="filters">
+    <button class="filter active" data-f="all">All</button>
+    <button class="filter" data-f="done">✅ Done</button>
+    <button class="filter" data-f="doing">🔄 In progress</button>
+    <button class="filter" data-f="todo">⏳ Pending</button>
+  </div>
+
+  <div id="taskList"></div>
+
+  <button class="reset" id="reset">↺ Reset all to default</button>
+</div>
+
+<footer>Saved automatically in your browser · built for Kashvi ★</footer>
+
+<script>
+/* ---------- Starfield ---------- */
+const cv = document.getElementById('stars'), c = cv.getContext('2d');
+let st = [];
+function rs(){ cv.width=innerWidth; cv.height=innerHeight;
+  st=Array.from({length:140},()=>({x:Math.random()*cv.width,y:Math.random()*cv.height,r:Math.random()*1.4+0.2,tw:Math.random()*0.05+0.01,p:Math.random()*6.28})); }
+addEventListener('resize',rs); rs();
+(function draw(){ c.clearRect(0,0,cv.width,cv.height);
+  for(const s of st){ s.p+=s.tw; c.globalAlpha=0.5+Math.sin(s.p)*0.5; c.fillStyle='#cfe0ff';
+    c.beginPath(); c.arc(s.x,s.y,s.r,0,6.28); c.fill(); }
+  c.globalAlpha=1; requestAnimationFrame(draw); })();
+
+/* ---------- Tabs ---------- */
+document.querySelectorAll('.tab').forEach(t=>t.onclick=()=>{
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');
+  document.getElementById(t.dataset.view==='diary'?'diary':'check').classList.add('active');
+});
+
+/* ---------- Checklist data ---------- */
+/* status: done | doing | todo  (the default state we start from) */
+const TASKS = [
+  { group:"Planning & Research", items:[
+    { id:"concept",   label:"Define the project concept & objective", meta:"The Exoplanet Biosphere Generator", s:"done" },
+    { id:"feedback",  label:"Review the idea & gather feedback", meta:"Separate physics from speculation", s:"done" },
+    { id:"scope",     label:"Decide scope & success criteria", meta:"Portfolio-quality website", s:"done" },
+    { id:"calibrate", label:"Calibrate the plan (skills, AI, deployment)", meta:"New to coding · real API · Vercel", s:"done" },
+    { id:"stack",     label:"Choose the tech stack", meta:"HTML/CSS/JS · Claude API · Vercel", s:"done" },
+    { id:"plan",      label:"Create the 10-day build plan", meta:"Layer-by-layer schedule", s:"done" },
+    { id:"research",  label:"Research: analyse exoplanet atmosphere lecture", meta:"Stanford Intro to Astro", s:"done" },
+    { id:"learnings", label:"Extract key science learnings", meta:"Cosmic shoreline · greenhouse · honesty", s:"done" },
+    { id:"guide",     label:"Build the interactive Project Guide", meta:"project-guide.html", s:"done" },
+    { id:"dashboard", label:"Build the Project Dashboard (diary + checklist)", meta:"project-dashboard.html", s:"done" },
+    { id:"spec",      label:"Fold new learnings into the physics spec", meta:"Escape velocity, albedo, greenhouse", s:"doing" },
+  ]},
+  { group:"Getting Ready", items:[
+    { id:"tools",     label:"Set up coding tools (editor + project folder)", meta:"Build Day 1", s:"todo" },
+    { id:"apikey",    label:"Get an Anthropic API key (+ small budget)", meta:"With Saurabh's help — needed by Day 8", s:"todo" },
+  ]},
+  { group:"The Build (10-day plan)", items:[
+    { id:"d2-inputs", label:"Build the input panel UI", meta:"Day 2 · sliders & star picker", s:"todo" },
+    { id:"d34-phys",  label:"Build the physics engine", meta:"Days 3–4 · gravity, temp, escape velocity, shoreline, greenhouse", s:"todo" },
+    { id:"d5-score",  label:"Habitability score & gauges", meta:"Day 5", s:"todo" },
+    { id:"d6-planet", label:"Reactive planet visualisation", meta:"Day 6 · colour, clouds, ice", s:"todo" },
+    { id:"d7-rules",  label:"Build the rules engine (physics → biology)", meta:"Day 7 · your science", s:"todo" },
+    { id:"d8-ai",     label:"Connect the Claude API for biospheres", meta:"Day 8 · full honest 'could support' descriptions", s:"todo" },
+    { id:"naming",    label:"Planet naming + honest description framing", meta:"Real name, or auto designation EBG-### · possibility wording", s:"todo" },
+    { id:"eco-visual",label:"Procedural food-chain visuals", meta:"Creature glyphs drawn from the physics", s:"done" },
+    { id:"ai-images", label:"AI-illustrated organisms (bonus)", meta:"Free Pollinations route · 'artist's impression'", s:"done" },
+    { id:"d9-polish", label:"Polish & the 'field report' reveal", meta:"Day 9", s:"todo" },
+    { id:"d10-ship",  label:"Deploy to Vercel & write up methods", meta:"Day 10 · launch 🚀", s:"todo" },
+  ]},
+  { group:"Data & Credits", items:[
+    { id:"nasa-data",   label:"Integrate the NASA Exoplanet Archive dataset", meta:"90 real exoplanets pulled live from NASA", s:"done" },
+    { id:"nasa-credit", label:"Add NASA data attribution & credits", meta:"Caltech/IPAC credited in footer", s:"done" },
+    { id:"analog",      label:"Nearest real-exoplanet analog match", meta:"'Closest known analog' card · measured properties only", s:"done" },
+  ]},
+];
+
+const order = ["todo","doing","done"];        // not used for cycling, see next
+const cycle = { todo:"doing", doing:"done", done:"todo" };
+const chipText = { todo:"Pending", doing:"In progress", done:"Done" };
+const boxMark = { todo:"", doing:"•", done:"✓" };
+
+const KEY = "exo-status-v1";
+let saved = {};
+try { saved = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch(e){ saved = {}; }
+
+function statusOf(it){ return saved[it.id] || it.s; }
+function persist(){ try{ localStorage.setItem(KEY, JSON.stringify(saved)); }catch(e){} }
+
+let filter = "all";
+
+function render(){
+  const list = document.getElementById('taskList');
+  list.innerHTML = "";
+  let done=0, doing=0, todo=0, total=0;
+
+  TASKS.forEach(g=>{
+    const visible = g.items.filter(it => filter==="all" || statusOf(it)===filter);
+    g.items.forEach(it=>{ const s=statusOf(it); total++; if(s==="done")done++; else if(s==="doing")doing++; else todo++; });
+    if(visible.length===0) return;
+    const gv = document.createElement('div'); gv.className="group";
+    gv.innerHTML = `<h4>${g.group}</h4>`;
+    visible.forEach(it=>{
+      const s = statusOf(it);
+      const t = document.createElement('div');
+      t.className="task"; t.dataset.s=s;
+      t.innerHTML = `<div class="box">${boxMark[s]}</div>
+        <div class="body"><div class="tlabel">${it.label}</div><div class="tmeta">${it.meta}</div></div>
+        <span class="chip">${chipText[s]}</span>`;
+      t.onclick = ()=>{ saved[it.id] = cycle[statusOf(it)]; persist(); render(); };
+      gv.appendChild(t);
+    });
+    list.appendChild(gv);
+  });
+
+  const pct = total ? Math.round(done/total*100) : 0;
+  document.getElementById('pct').textContent = pct + "%";
+  document.getElementById('ring').style.setProperty('--p', pct);
+  document.getElementById('cDone').textContent = done;
+  document.getElementById('cDoing').textContent = doing;
+  document.getElementById('cTodo').textContent = todo;
+}
+
+document.querySelectorAll('.filter').forEach(f=>f.onclick=()=>{
+  document.querySelectorAll('.filter').forEach(x=>x.classList.remove('active'));
+  f.classList.add('active'); filter=f.dataset.f; render();
+});
+document.getElementById('reset').onclick=()=>{
+  if(confirm("Reset all tasks to their default status?")){ saved={}; persist(); render(); }
+};
+render();
+</script>
+</body>
+</html>
