@@ -60,6 +60,7 @@ export function initPlanet(container) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(W(), H());
   renderer.toneMapping = THREE.AgXToneMapping;
+  renderer.toneMappingExposure = 0.88;   // tamed so lit surfaces don't clip to white
   container.appendChild(renderer.domElement);
 
   const camera = new THREE.PerspectiveCamera(38, W() / H(), 0.1, 100);
@@ -83,7 +84,7 @@ export function initPlanet(container) {
 
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(W(), H()), 0.5, 0.6, 1.0);
+  const bloom = new UnrealBloomPass(new THREE.Vector2(W(), H()), 0.0, 0.4, 1.6);
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
   composer.setPixelRatio(renderer.getPixelRatio());
@@ -122,6 +123,9 @@ export function initPlanet(container) {
       if (!materials[name]) return;
       active = name; quad.material = materials[name];
       controls.autoRotate = name !== 'cutaway';   // hold still for the anatomy view
+      // bloom only on the atmosphere view; near-zero elsewhere → no white "fog"
+      bloom.strength = name === 'atmosphere' ? 0.4 : 0.0;
+      bloom.threshold = name === 'atmosphere' ? 1.0 : 1.6;
     },
     apply(view, vals) {
       if (view !== active) this.setView(view);
