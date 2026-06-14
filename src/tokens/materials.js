@@ -69,32 +69,86 @@ function tempColors(Tsurf, water, stripped) {
   return ['#f0f7ff', '#9fb3c8'];
 }
 
-// Map inputs + physics → a full shader uniform set the planet engine consumes.
-export function inputsToEngine(inputs, physics) {
-  const key = selectArchetype(inputs, physics);
+// Atmospheric rim colour per archetype (for the surface & cutaway shaders)
+const RIM = { thin: '#9fb8c4', n2o2: '#8ab8ff', h2he: '#7fb0ff', watervapor: '#bfe0ff',
+              co2: '#e8d6a0', methane: '#5fd6c0', exotic: '#cf8ad0' };
+
+function lightDir(azDeg, elDeg) {
+  const az = azDeg * Math.PI / 180, el = elDeg * Math.PI / 180;
+  return [Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az)];
+}
+
+// ---- ATMOSPHERE shader uniforms (single-scattering archetypes) ----
+export function atmosphereUniforms(p, d) {
+  const key = selectArchetype(p, d);
   const atm = ATMOSPHERES[key];
-  const star = STARS[inputs.star] || STARS.G;
-  const stripped = physics.retention === 'stripped';
-
-  // gas giants keep their banded archetype palette; rocky/ice worlds tint by temp
-  let surfA, surfB;
-  if (key === 'h2he') { surfA = '#27405e'; surfB = '#b8cbe0'; }
-  else { [surfA, surfB] = tempColors(physics.Tsurf, inputs.water, stripped); }
-
-  const scale = (arr, s) => arr.map((v) => v * s);
+  const star = STARS[p.star] || STARS.G;
+  const stripped = d.retention === 'stripped';
+  let A, B;
+  if (key === 'h2he') { A = '#27405e'; B = '#b8cbe0'; }
+  else { [A, B] = tempColors(d.Tsurf, p.water, stripped); }
+  const s = (arr, k) => arr.map((v) => v * k);
   return {
-    archetypeKey: key,
-    atmoHeight: stripped ? 0.012 : atm.atmoHeight,
-    Hr: atm.Hr, Hm: atm.Hm,
-    betaR: scale(atm.betaR, atm.betaRScale),
-    betaM: scale(atm.betaM, atm.betaMScale),
-    betaA: scale(atm.betaA, atm.betaAScale),
-    mieG: atm.mieG,
-    surfaceMode: atm.surfaceMode,
-    surfColA: surfA, surfColB: surfB,
-    sunColor: star.sunColor,
-    sunIntensity: stripped ? star.sunIntensity * 0.85 : star.sunIntensity,
-    nightAmbient: 0.004,
-    sunAzimuth: 112, sunElevation: 6,
+    uAtmoHeight: stripped ? 0.012 : atm.atmoHeight, uHr: atm.Hr, uHm: atm.Hm,
+    uBetaR: s(atm.betaR, atm.betaRScale), uBetaM: s(atm.betaM, atm.betaMScale), uBetaA: s(atm.betaA, atm.betaAScale),
+    uMieG: atm.mieG, uSurfaceMode: atm.surfaceMode, uSurfColA: A, uSurfColB: B,
+    uSunColor: star.sunColor, uSunIntensity: stripped ? star.sunIntensity * 0.85 : star.sunIntensity,
+    uNightAmbient: 0.004, uViewSteps: 80, uLightSteps: 10, uLightDir: lightDir(112, 6),
+  };
+}
+
+// ---- SURFACE shader uniforms (continents/oceans/clouds, bands, storms) ----
+export function surfaceUniforms(p, d) {
+  const star = STARS[p.star] || STARS.G;
+  const stripped = d.retention === 'stripped';
+  const a = p.atmosphere;
+  const key = selectArchetype(p, d);
+  const atmoCol = stripped ? '#20303a' : (RIM[key] || '#8ab8ff');
+
+  let type, colA, colB, colC, colD, colE, sea = 0.5, cloudAmt = 0, storm = 0, band = 8, warp = 0.5, rim = 0.6;
+  const cloudCol = '#eef4ff';
+
+  if (key === 'h2he' || (p.radius > 2.2 && p.mass > 15)) {
+    type = 1; // gas giant — turbulent bands + red storm
+    colA = '#3a4f74'; colB = '#9fb6d6'; colC = '#c8d6ea'; colD = '#e7eef8'; colE = '#d9683a';
+    band = 16; warp = 0.6; storm = 1.0; rim = 0.5;
+  } else if (key === 'methane' || key === 'watervapor' || d.Tsurf < 240) {
+    type = 2; // ice giant — soft teal banding, white storm
+    colA = '#1b4f5e'; colB = '#3f93a6'; colC = '#7fc3cf'; colD = '#cfeef2'; colE = '#ffffff';
+    band = 10; warp = 0.4; storm = 0.5; rim = 0.6;
+  } else {
+    type = 0; // terrestrial
+    const veg = p.star === 'M' ? '#5a2e2e' : (p.star === 'A' || p.star === 'F') ? '#5a4a7a' : '#3f7a45';
+    if (d.Tsurf >= 320) { colA = '#6b4a2a'; colB = '#caa06a'; colC = '#caa06a'; colD = '#8a5a32'; colE = '#e6d7c0'; sea = 0.95; cloudAmt = 0.12; }
+    else if (d.Tsurf < 255) { colA = '#2a4a66'; colB = '#6f96b8'; colC = '#cfe0ef'; colD = '#e8f2fb'; colE = '#ffffff'; sea = 0.55; cloudAmt = 0.2; }
+    else { colA = '#0e2f4e'; colB = '#2f6fae'; colC = veg; colD = '#9c8a54'; colE = '#eef6ff'; sea = 0.62 - (p.water / 100) * 0.32; cloudAmt = Math.min(0.7, p.water / 100 * 0.45 + a.H2O / 100 * 1.2); }
+  }
+  if (stripped) { type = 0; colA = '#3a3a3a'; colB = '#6e6e6e'; colC = '#7c7c7c'; colD = '#9a9a9a'; colE = '#bdbdbd'; sea = 1.0; cloudAmt = 0; rim = 0.15; }
+
+  return {
+    uSunColor: star.sunColor, uAmbient: 0.05, uNightAmbient: stripped ? 0.01 : 0.02,
+    uSurfaceType: type, uYaw: 0.0, uCloudYaw: 0.6,
+    uColA: colA, uColB: colB, uColC: colC, uColD: colD, uColE: colE,
+    uCloudCol: cloudCol, uAtmoCol: atmoCol, uSeaLevel: sea, uCloudAmount: cloudAmt, uCloudSharp: 0.55,
+    uBandFreq: band, uWarp: warp, uStorm: storm, uBumpStrength: 1.2, uRimStrength: rim, uRAtmo: 1.05,
+    uLightDir: lightDir(112, 6),
+  };
+}
+
+// ---- CUTAWAY shader uniforms (sliced anatomy: crust/mantle/core) ----
+export function cutawayUniforms(p, d) {
+  const star = STARS[p.star] || STARS.G;
+  const stripped = d.retention === 'stripped';
+  const key = selectArchetype(p, d);
+  const density = p.mass / Math.pow(p.radius, 3);            // Earth = 1
+  const coreFrac = Math.max(0.32, Math.min(0.6, 0.42 + (density - 1) * 0.06)); // denser → bigger core
+  const [surfA, surfB] = tempColors(d.Tsurf, p.water, stripped);
+  return {
+    uRAtmo: 1.06, uRSurface: 1.0, uRCrustBase: 0.86, uRMantleBase: coreFrac, uRInnerCore: coreFrac * 0.5,
+    uCrustA: '#5a4a3a', uCrustB: '#8a7256', uMantleA: '#7a3a22', uMantleB: '#b25a2e',
+    uCoreCol: '#ff6a2a', uInnerCoreCol: '#ffe1a0', uSurfA: surfA, uSurfB: surfB,
+    uAtmoCol: stripped ? '#20303a' : (RIM[key] || '#8ab8ff'),
+    uCoreEmissive: 1.0 + Math.min(0.8, (p.mass - 1) * 0.05), uRimStrength: 0.5, uBoundaryGlow: 0.85,
+    uNightAmbient: 0.02, uSunColor: star.sunColor, uAmbient: 0.14, uLightDir: lightDir(120, 10),
   };
 }

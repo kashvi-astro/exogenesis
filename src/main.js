@@ -1,10 +1,10 @@
 import './style.css';
 import { initPlanet } from './planet.js';
-import { computePhysics, kelvinToCelsius, radiationLevel } from './science/physics.js';
+import { computePhysics, kelvinToCelsius, radiationLevel, waterState } from './science/physics.js';
 import { generateBiosphere } from './science/rules.js';
 import { buildFieldReport } from './science/report.js';
 import { nearestExoplanet } from './science/analog.js';
-import { inputsToEngine, GAS_COLORS } from './tokens/materials.js';
+import { atmosphereUniforms, surfaceUniforms, cutawayUniforms } from './tokens/materials.js';
 
 const $ = (id) => document.getElementById(id);
 const GAS_TOKEN = { N2: '--gas-n2', O2: '--gas-o2', CO2: '--gas-co2', CH4: '--gas-ch4', H2: '--gas-h2', H2O: '--gas-h2o' };
@@ -13,6 +13,8 @@ const STAR_NAMES = { M: 'M — Red dwarf', K: 'K — Orange dwarf', G: 'G — Su
 const planet = initPlanet($('scene'));
 $('status').textContent = 'engine online · real-time render';
 
+let currentView = 'surface';
+const VIEW_UNIFORMS = { surface: surfaceUniforms, atmosphere: atmosphereUniforms, cutaway: cutawayUniforms };
 let latest = null, reportShown = false;
 
 function readInputs() {
@@ -48,6 +50,27 @@ function glyph(node) {
   return `<svg viewBox="0 0 60 60" width="52" height="52"><ellipse cx="30" cy="${by}" rx="${rx}" ry="${ry}" fill="${c}"/><circle cx="${30 + rx * 0.7}" cy="${by - ry * 0.4}" r="3.6" fill="${c}"/>${legs}</svg>`;
 }
 
+// Short honest descriptor under the globe (e.g. "temperate ocean · nitrogen atmosphere")
+function captionFor(p, d) {
+  const T = d.Tsurf, stripped = d.retention === 'stripped';
+  let tw;
+  if (stripped && T < 700) tw = T < 273 ? 'frozen rock' : 'bare rock';
+  else if (T >= 700) tw = 'molten';
+  else if (T >= 400) tw = 'scorched rock';
+  else if (T >= 320) tw = 'hot desert';
+  else if (T >= 273) tw = p.water >= 25 ? 'temperate ocean' : 'temperate rock';
+  else if (T >= 235) tw = 'cold';
+  else tw = 'frozen';
+  let aw = 'no atmosphere';
+  if (!stripped) {
+    let dom = 'N2', mv = -1;
+    for (const g in p.atmosphere) if (p.atmosphere[g] > mv) { mv = p.atmosphere[g]; dom = g; }
+    aw = { N2: 'nitrogen atmosphere', O2: 'oxygen-rich air', CO2: 'CO₂ atmosphere',
+           CH4: 'methane haze', H2: 'hydrogen envelope', H2O: 'steam atmosphere' }[dom];
+  }
+  return tw + ' · ' + aw;
+}
+
 function update() {
   const p = readInputs();
 
@@ -65,8 +88,9 @@ function update() {
   const bio = generateBiosphere({ ...p, ...d });
   const analog = nearestExoplanet(p);
 
-  // drive the planet from material tokens
-  planet.apply(inputsToEngine(p, d));
+  // drive the planet from material tokens, for the current view
+  planet.apply(currentView, VIEW_UNIFORMS[currentView](p, d));
+  $('planetCap').textContent = captionFor(p, d);
 
   // planet data card
   const designation = 'EBG-' + p.star + Math.round(p.mass * 10) + '-' + Math.round(p.radius * 10);
@@ -93,6 +117,7 @@ function update() {
     ['Atmosphere', 'estimate', d.retention, 'cosmic shoreline', retCls],
     ['Equilibrium T', 'rigorous', Math.round(d.Teq) + ' K', Math.round(kelvinToCelsius(d.Teq)) + ' °C', ''],
     ['Surface T', 'estimate', Math.round(d.Tsurf) + ' K', '+' + Math.round(d.greenhouse) + ' K greenhouse', ''],
+    ['Liquid water', 'estimate', waterState(d.Tsurf), 'at ~1 atm pressure', ''],
   ];
   $('metrics').innerHTML = metrics.map((m) => `<div class="metric"><div class="m-label">${m[0]}<span class="tier ${m[1]}">${m[1]}</span></div><div class="m-value ${m[4]}">${m[2]}</div><div class="m-sub">${m[3]}</div></div>`).join('');
 
@@ -126,6 +151,22 @@ $('reportBtn').addEventListener('click', () => {
   reportShown = true;
   $('reportBtn').textContent = 'Regenerate field report';
   renderReport();
+});
+
+// view switcher: Surface · Atmosphere · Cutaway
+document.querySelectorAll('.view-toggle button').forEach((b) => b.addEventListener('click', () => {
+  document.querySelectorAll('.view-toggle button').forEach((x) => x.classList.remove('active'));
+  b.classList.add('active');
+  currentView = b.dataset.view;
+  update();
+}));
+
+// full-screen toggle for the planet view
+$('fsBtn').addEventListener('click', () => {
+  const el = $('planetFs');
+  const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+  if (!fsEl) (el.requestFullscreen || el.webkitRequestFullscreen)?.call(el);
+  else (document.exitFullscreen || document.webkitExitFullscreen)?.call(document);
 });
 
 update();
