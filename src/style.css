@@ -1,0 +1,53 @@
+/*
+  style.css — Exogenesis tool, on the engine's design system.
+  Palette borrowed from the exoplanet-system repo:
+  bg #04060a · cyan #38e1ff · text #d7e3ee · JetBrains Mono.
+*/
+:root {
+  --bg: #04060a;
+  --panel: rgba(14, 22, 34, 0.55);
+  --border: rgba(56, 225, 255, 0.25);
+  --text: #d7e3ee;
+  --muted: #6b7c8d;
+  --cyan: #38e1ff;
+  --mono: ui-monospace, "JetBrains Mono", "SF Mono", Menlo, monospace;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--mono);
+  overflow: hidden;
+}
+
+/* The WebGL scene sits full-bleed behind everything */
+#scene {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+}
+#scene canvas { display: block; }
+
+/* Site bar overlaid on the scene */
+.topbar {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 2;
+  display: flex;
+  align-items: baseline;
+  gap: 18px;
+  padding: 18px 26px;
+}
+.brand {
+  font-size: 15px;
+  letter-spacing: 0.34em;
+  font-weight: 500;
+  color: var(--text);
+  text-decoration: none;
+}
+.tagline {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--muted);
+}
