@@ -1,204 +1,131 @@
 import './style.css';
-import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
-import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import GUI from 'lil-gui';
-import fragmentShader from './engine/atmosphere.frag.glsl?raw';
+import { initPlanet } from './planet.js';
+import { computePhysics, kelvinToCelsius, radiationLevel } from './science/physics.js';
+import { generateBiosphere } from './science/rules.js';
+import { buildFieldReport } from './science/report.js';
+import { nearestExoplanet } from './science/analog.js';
+import { inputsToEngine, GAS_COLORS } from './tokens/materials.js';
 
-const vertexShader = /* glsl */ `
-  void main() { gl_Position = vec4(position.xy, 0.0, 1.0); }
-`;
+const $ = (id) => document.getElementById(id);
+const GAS_TOKEN = { N2: '--gas-n2', O2: '--gas-o2', CO2: '--gas-co2', CH4: '--gas-ch4', H2: '--gas-h2', H2O: '--gas-h2o' };
+const STAR_NAMES = { M: 'M — Red dwarf', K: 'K — Orange dwarf', G: 'G — Sun-like', F: 'F — Yellow-white', A: 'A — White' };
 
-// ---------- atmosphere archetype presets ----------
-// betaR/betaM/betaA are scattering/absorption coefficients in 1/planet-radius
-// units. Colours fall out of the physics (methane absorbs red -> teal, etc.).
-const PRESETS = {
-  'Thin (barely there)': {
-    atmoHeight: 0.035, Hr: 0.012, Hm: 0.010,
-    betaR: [4.0, 2.6, 1.6], betaRScale: 1.6,
-    betaM: [2.0, 1.8, 1.5], betaMScale: 1.2, mieG: 0.70,
-    betaA: [0, 0, 0], betaAScale: 0,
-    surfaceMode: 0, surfColA: '#4a3a2e', surfColB: '#8a7460',
-    sunColor: '#fff3e0', sunIntensity: 14, nightAmbient: 0.004,
-  },
-  'H2/He (gas giant)': {
-    atmoHeight: 0.12, Hr: 0.040, Hm: 0.028,
-    betaR: [5.8, 13.5, 33.1], betaRScale: 0.55,
-    betaM: [4.0, 4.0, 4.0], betaMScale: 0.5, mieG: 0.76,
-    betaA: [0, 0, 0], betaAScale: 0,
-    surfaceMode: 1, surfColA: '#27405e', surfColB: '#b8cbe0',
-    sunColor: '#f4f7ff', sunIntensity: 16, nightAmbient: 0.003,
-  },
-  'Water vapor (sub-Neptune)': {
-    atmoHeight: 0.10, Hr: 0.034, Hm: 0.030,
-    betaR: [4.5, 12.0, 22.0], betaRScale: 0.7,
-    betaM: [8.0, 9.0, 9.5], betaMScale: 0.9, mieG: 0.62,
-    betaA: [0, 0, 0], betaAScale: 0,
-    surfaceMode: 2, surfColA: '#2c4a5e', surfColB: '#5a7d92',
-    sunColor: '#fdfdff', sunIntensity: 15, nightAmbient: 0.004,
-  },
-  'CO2 (terrestrial)': {
-    atmoHeight: 0.055, Hr: 0.018, Hm: 0.014,
-    betaR: [9.0, 7.0, 4.5], betaRScale: 1.1,
-    betaM: [11.0, 9.0, 6.5], betaMScale: 1.3, mieG: 0.72,
-    betaA: [0, 0, 0], betaAScale: 0,
-    surfaceMode: 0, surfColA: '#3d3026', surfColB: '#94704c',
-    sunColor: '#ffe9c4', sunIntensity: 15, nightAmbient: 0.004,
-  },
-  'Methane (ice giant)': {
-    atmoHeight: 0.11, Hr: 0.038, Hm: 0.030,
-    betaR: [3.5, 9.5, 9.0], betaRScale: 0.8,
-    betaM: [3.0, 4.5, 4.5], betaMScale: 0.6, mieG: 0.70,
-    betaA: [8.0, 1.6, 0.2], betaAScale: 0.8,
-    surfaceMode: 2, surfColA: '#173a45', surfColB: '#2e6e78',
-    sunColor: '#f4f9ff', sunIntensity: 16, nightAmbient: 0.003,
-  },
-  'Exotic haze (photochemical)': {
-    atmoHeight: 0.13, Hr: 0.045, Hm: 0.050,
-    betaR: [7.0, 2.5, 9.5], betaRScale: 0.7,
-    betaM: [9.5, 3.5, 11.0], betaMScale: 0.9, mieG: 0.84,
-    betaA: [0.6, 7.5, 0.4], betaAScale: 0.9,
-    surfaceMode: 2, surfColA: '#241a30', surfColB: '#4a3358',
-    sunColor: '#ffe2f0', sunIntensity: 17, nightAmbient: 0.003,
-  },
-};
+const planet = initPlanet($('scene'));
+$('status').textContent = 'engine online · real-time render';
 
-const params = {
-  preset: 'H2/He (gas giant)',
-  sunAzimuth: 110,
-  sunElevation: 6,
-  exposure: 1.0,
-  bloomStrength: 0.55,
-  bloomRadius: 0.65,
-  bloomThreshold: 1.0,
-  viewSteps: 64,
-  lightSteps: 8,
-  ...structuredClone(PRESETS['H2/He (gas giant)']),
-};
+let latest = null, reportShown = false;
 
-const sceneEl = document.getElementById('scene');
-
-const renderer = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: true });
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.toneMapping = THREE.AgXToneMapping;
-renderer.toneMappingExposure = params.exposure;
-sceneEl.appendChild(renderer.domElement);
-
-const camera = new THREE.PerspectiveCamera(38, window.innerWidth / window.innerHeight, 0.1, 100);
-camera.position.set(-0.4, 0.35, 3.1);
-
-const controls = new OrbitControls(camera, renderer.domElement);
-controls.enableDamping = true;
-controls.minDistance = 1.15;
-controls.maxDistance = 12;
-
-const uniforms = {
-  uResolution: { value: new THREE.Vector2() },
-  uCamWorld: { value: new THREE.Matrix4() },
-  uProjInv: { value: new THREE.Matrix4() },
-  uLightDir: { value: new THREE.Vector3(1, 0, 0) },
-  uSunColor: { value: new THREE.Color() },
-  uSunIntensity: { value: 15 },
-  uAtmoHeight: { value: 0.1 },
-  uHr: { value: 0.03 },
-  uHm: { value: 0.02 },
-  uBetaR: { value: new THREE.Vector3() },
-  uBetaM: { value: new THREE.Vector3() },
-  uBetaA: { value: new THREE.Vector3() },
-  uMieG: { value: 0.76 },
-  uViewSteps: { value: 64 },
-  uLightSteps: { value: 8 },
-  uSurfaceMode: { value: 1 },
-  uSurfColA: { value: new THREE.Color() },
-  uSurfColB: { value: new THREE.Color() },
-  uNightAmbient: { value: 0.004 },
-};
-
-const scene = new THREE.Scene();
-const triangle = new THREE.BufferGeometry();
-triangle.setAttribute('position', new THREE.BufferAttribute(
-  new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]), 3,
-));
-const quad = new THREE.Mesh(triangle, new THREE.ShaderMaterial({ vertexShader, fragmentShader, uniforms }));
-quad.frustumCulled = false;
-scene.add(quad);
-
-const composer = new EffectComposer(renderer);
-composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(
-  new THREE.Vector2(window.innerWidth, window.innerHeight),
-  params.bloomStrength, params.bloomRadius, params.bloomThreshold,
-);
-composer.addPass(bloom);
-composer.addPass(new OutputPass());
-composer.setPixelRatio(renderer.getPixelRatio());
-
-// ---------- dev GUI (temporary; the product UI replaces this) ----------
-const gui = new GUI({ title: 'engine · atmosphere' });
-gui.add(params, 'preset', Object.keys(PRESETS)).onChange(applyPreset);
-const fA = gui.addFolder('atmosphere');
-fA.add(params, 'atmoHeight', 0.005, 0.25);
-fA.add(params, 'betaRScale', 0, 4).name('rayleigh');
-fA.add(params, 'betaMScale', 0, 4).name('mie');
-fA.add(params, 'betaAScale', 0, 4).name('absorption');
-fA.add(params, 'mieG', 0, 0.95).name('mie anisotropy');
-const fL = gui.addFolder('star');
-fL.add(params, 'sunAzimuth', -180, 180);
-fL.add(params, 'sunElevation', -60, 60);
-fL.add(params, 'sunIntensity', 1, 60);
-const fP = gui.addFolder('post');
-fP.add(params, 'exposure', 0.2, 3);
-fP.add(params, 'bloomStrength', 0, 2);
-
-function applyPreset(name) {
-  Object.assign(params, structuredClone(PRESETS[name]));
-  gui.controllersRecursive().forEach((c) => c.updateDisplay());
+function readInputs() {
+  return {
+    star: $('star').value,
+    mass: parseFloat($('mass').value), radius: parseFloat($('radius').value),
+    distance: parseFloat($('dist').value), rotation: parseFloat($('rotation').value),
+    water: parseFloat($('water').value),
+    atmosphere: {
+      N2: +$('gasN2').value, O2: +$('gasO2').value, CO2: +$('gasCO2').value,
+      CH4: +$('gasCH4').value, H2: +$('gasH2').value, H2O: +$('gasH2O').value,
+    },
+  };
 }
 
-function syncUniforms() {
-  const az = THREE.MathUtils.degToRad(params.sunAzimuth);
-  const el = THREE.MathUtils.degToRad(params.sunElevation);
-  uniforms.uLightDir.value.set(
-    Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az),
-  ).normalize();
-  uniforms.uSunColor.value.set(params.sunColor);
-  uniforms.uSunIntensity.value = params.sunIntensity;
-  uniforms.uAtmoHeight.value = params.atmoHeight;
-  uniforms.uHr.value = params.Hr;
-  uniforms.uHm.value = params.Hm;
-  uniforms.uBetaR.value.fromArray(params.betaR).multiplyScalar(params.betaRScale);
-  uniforms.uBetaM.value.fromArray(params.betaM).multiplyScalar(params.betaMScale);
-  uniforms.uBetaA.value.fromArray(params.betaA).multiplyScalar(params.betaAScale);
-  uniforms.uMieG.value = params.mieG;
-  uniforms.uViewSteps.value = Math.round(params.viewSteps);
-  uniforms.uLightSteps.value = Math.round(params.lightSteps);
-  uniforms.uSurfaceMode.value = params.surfaceMode;
-  uniforms.uSurfColA.value.set(params.surfColA);
-  uniforms.uSurfColB.value.set(params.surfColB);
-  uniforms.uNightAmbient.value = params.nightAmbient;
-  renderer.toneMappingExposure = params.exposure;
-  bloom.strength = params.bloomStrength;
-  bloom.radius = params.bloomRadius;
-  bloom.threshold = params.bloomThreshold;
-  camera.updateMatrixWorld();
-  uniforms.uCamWorld.value.copy(camera.matrixWorld);
-  uniforms.uProjInv.value.copy(camera.projectionMatrixInverse);
-  renderer.getDrawingBufferSize(uniforms.uResolution.value);
+function paintSliders() {
+  document.querySelectorAll('input[type="range"]').forEach((el) => {
+    const pct = ((el.value - el.min) / (el.max - el.min)) * 100;
+    el.style.background = `linear-gradient(90deg, var(--cyan) ${pct}%, rgba(120,150,200,0.18) ${pct}%)`;
+  });
 }
 
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  composer.setSize(window.innerWidth, window.innerHeight);
+// --- food-chain creature glyphs (SVG, physics-driven) ---
+function glyph(node) {
+  const c = node.color;
+  if (node.kind === 'plant') return `<svg viewBox="0 0 60 60" width="52" height="52"><line x1="30" y1="56" x2="30" y2="24" stroke="${c}" stroke-width="3"/><path d="M30 32 Q17 24 13 32" stroke="${c}" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M30 27 Q43 19 47 27" stroke="${c}" stroke-width="3" fill="none" stroke-linecap="round"/><path d="M30 23 Q24 12 31 7" stroke="${c}" stroke-width="3" fill="none" stroke-linecap="round"/></svg>`;
+  if (node.kind === 'microbe') { const cells = [[24,28,7],[36,26,6],[30,38,8],[40,39,5],[22,40,4]]; return `<svg viewBox="0 0 60 60" width="52" height="52">${cells.map((k) => `<circle cx="${k[0]}" cy="${k[1]}" r="${k[2]}" fill="${c}" opacity="0.85"/>`).join('')}</svg>`; }
+  let rx, ry, leg, by;
+  if (node.aspect === 'squat') { rx = 16; ry = 9; leg = 8; by = 30; }
+  else if (node.aspect === 'upright') { rx = 8; ry = 16; leg = 16; by = 24; }
+  else { rx = 13; ry = 12; leg = 11; by = 28; }
+  const legs = [-0.6, -0.2, 0.2, 0.6].map((o) => `<line x1="${30 + rx * o}" y1="${by + ry - 2}" x2="${30 + rx * o}" y2="${by + ry - 2 + leg}" stroke="${c}" stroke-width="2.5" stroke-linecap="round"/>`).join('');
+  return `<svg viewBox="0 0 60 60" width="52" height="52"><ellipse cx="30" cy="${by}" rx="${rx}" ry="${ry}" fill="${c}"/><circle cx="${30 + rx * 0.7}" cy="${by - ry * 0.4}" r="3.6" fill="${c}"/>${legs}</svg>`;
+}
+
+function update() {
+  const p = readInputs();
+
+  // slider labels
+  $('massV').textContent = p.mass.toFixed(1); $('radiusV').textContent = p.radius.toFixed(1);
+  $('distV').textContent = p.distance.toFixed(2); $('rotationV').textContent = p.rotation;
+  $('waterV').textContent = p.water;
+  for (const g of ['N2', 'O2', 'CO2', 'CH4', 'H2', 'H2O']) $(`gas${g}V`).textContent = p.atmosphere[g];
+  const total = Object.values(p.atmosphere).reduce((a, b) => a + b, 0);
+  $('atmoTotal').textContent = total;
+  $('atmoTotalBox').className = 'atmo-total ' + (total === 100 ? 'ok' : 'warn');
+
+  // science
+  const d = computePhysics(p);
+  const bio = generateBiosphere({ ...p, ...d });
+  const analog = nearestExoplanet(p);
+
+  // drive the planet from material tokens
+  planet.apply(inputsToEngine(p, d));
+
+  // planet data card
+  const designation = 'EBG-' + p.star + Math.round(p.mass * 10) + '-' + Math.round(p.radius * 10);
+  const dots = Object.keys(p.atmosphere).filter((g) => p.atmosphere[g] > 0)
+    .map((g) => `<i class="pcdot" style="--d:var(${GAS_TOKEN[g]})"></i>`).join('');
+  $('planetCard').innerHTML = `<div class="pc-head"><span class="pc-name">${designation}</span><span class="pc-tag">auto-generated</span></div>
+    <div class="pc-stats"><div><span class="k">Radius</span><span class="vv">${p.radius.toFixed(1)} R⊕</span></div>
+    <div><span class="k">Mass</span><span class="vv">${p.mass.toFixed(1)} M⊕</span></div>
+    <div><span class="k">Surface T</span><span class="vv">${Math.round(d.Tsurf)} K</span></div>
+    <div><span class="k">Gravity</span><span class="vv">${d.gravity.toFixed(2)} g</span></div></div>
+    <div class="pc-atmo"><span class="k">Atmosphere</span><span class="pc-dots">${dots || '<span class="none">none</span>'}</span></div>`;
+
+  // habitability gauge
+  const v = d.verdict;
+  $('habitability').innerHTML = `<div class="score-card"><div class="score-ring" style="--p:${d.score}; --col:var(--${v.cls})"><div class="score-inner"><div class="score-num">${d.score}</div><div class="score-max">/100</div></div></div>
+    <div class="score-text"><div class="score-verdict ${v.cls}">${v.word}</div><div class="score-desc">Habitability index · estimate</div></div></div>`;
+
+  // metrics
+  const retCls = d.retention === 'retained' ? 'ok' : d.retention === 'marginal' ? 'warn' : 'bad';
+  const metrics = [
+    ['Surface gravity', 'rigorous', d.gravity.toFixed(2) + ' g', (d.gravity * 9.81).toFixed(1) + ' m/s²', ''],
+    ['Escape velocity', 'rigorous', d.escapeVelocity.toFixed(1) + ' km/s', 'Earth = 11.2', ''],
+    ['Radiation', 'estimate', d.radiation.toFixed(1) + ' ×⊕', radiationLevel(d.radiation), ''],
+    ['Atmosphere', 'estimate', d.retention, 'cosmic shoreline', retCls],
+    ['Equilibrium T', 'rigorous', Math.round(d.Teq) + ' K', Math.round(kelvinToCelsius(d.Teq)) + ' °C', ''],
+    ['Surface T', 'estimate', Math.round(d.Tsurf) + ' K', '+' + Math.round(d.greenhouse) + ' K greenhouse', ''],
+  ];
+  $('metrics').innerHTML = metrics.map((m) => `<div class="metric"><div class="m-label">${m[0]}<span class="tier ${m[1]}">${m[1]}</span></div><div class="m-value ${m[4]}">${m[2]}</div><div class="m-sub">${m[3]}</div></div>`).join('');
+
+  // nearest analog
+  const e = analog.planet;
+  $('analogCard').innerHTML = `<div class="ac-head"><span class="ac-label">Closest known analog</span><span class="ac-sim">${analog.similarity}% match</span></div>
+    <div class="ac-name">${e.name}</div><div class="ac-stats">${e.radius} R⊕ · ${e.mass} M⊕ · ${e.distance} AU · ${e.star}-type</div>
+    <div class="ac-note">Matched on size, mass, orbit &amp; star across ${analog.count.toLocaleString()} NASA worlds — not atmosphere.</div>`;
+
+  // biosphere
+  const lvl = bio.level === 'promising' ? 'ok' : bio.level === 'limited' ? 'warn' : 'bad';
+  $('bioSummary').innerHTML = `<span class="bio-level ${lvl}">${bio.level}</span> ${bio.summary}`;
+  $('bioFindings').innerHTML = bio.findings.map((f) => `<div class="bio-finding"><div class="bio-cat">${f.cat}</div><div class="bio-concl">${f.conclusion}</div><div class="bio-reason">${f.reason}</div></div>`).join('');
+  $('ecosystem').innerHTML = bio.ecosystem.chain.map((n, i) => (i ? '<span class="eco-arrow">→</span>' : '') + `<div class="eco-node"><div class="eco-glyph">${glyph(n)}</div><div class="eco-name">${n.label}</div><div class="eco-role">${n.role}</div></div>`).join('');
+
+  latest = { p, d, bio };
+  if (reportShown) renderReport();
+  paintSliders();
+}
+
+function renderReport() {
+  const r = buildFieldReport(latest.p, latest.d, latest.bio);
+  $('fieldReport').innerHTML = `<div class="fr-head"><span class="fr-name">${r.designation}</span><span class="fr-tag">field report · draft</span></div>` +
+    r.paragraphs.map((t) => `<p>${t}</p>`).join('') + `<p class="fr-disc">${r.disclaimer}</p>`;
+}
+
+['star', 'mass', 'radius', 'dist', 'rotation', 'water', 'gasN2', 'gasO2', 'gasCO2', 'gasCH4', 'gasH2', 'gasH2O']
+  .forEach((id) => $(id).addEventListener('input', update));
+
+$('reportBtn').addEventListener('click', () => {
+  reportShown = true;
+  $('reportBtn').textContent = 'Regenerate field report';
+  renderReport();
 });
 
-renderer.setAnimationLoop(() => {
-  controls.update();
-  syncUniforms();
-  composer.render();
-});
+update();
