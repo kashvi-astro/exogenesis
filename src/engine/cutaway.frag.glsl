@@ -75,18 +75,15 @@ vec3 camPos() { return uCamWorld[3].xyz; }
 
 // ---------- background ----------
 vec3 background(vec3 rd) {
-  vec3 col = vec3(0.0);
-  vec3 cell = floor(rd * 220.0);
-  float star = hash13(cell);
-  if (star > 0.9975) {
-    float tw = hash13(cell + 17.0);
-    float mag = pow((star - 0.9975) / 0.0025, 2.0);
-    col += mix(vec3(0.7,0.8,1.0), vec3(1.0,0.85,0.7), tw) * mag * 2.0;
-  }
-  float neb = fbm(rd * 2.6 + vec3(4.2,1.7,8.3));
-  neb = pow(max(neb - 0.45, 0.0) * 1.8, 2.2);
-  vec3 nebCol = mix(vec3(0.16,0.06,0.30), vec3(0.04,0.12,0.28), fbm(rd*1.3 + 3.0));
-  col += nebCol * neb * 0.26;
+  vec3 col = mix(vec3(0.018,0.028,0.055), vec3(0.004,0.006,0.016), clamp(rd.y*0.5+0.5,0.0,1.0));
+  vec3 gp = rd * 160.0;
+  vec3 cell = floor(gp);
+  vec3 fp = fract(gp) - 0.5;
+  float s = smoothstep(0.45, 0.0, length(fp)) * smoothstep(0.990, 1.0, hash13(cell));
+  float tw = hash13(cell + 17.0);
+  col += mix(vec3(0.75,0.83,1.0), vec3(1.0,0.86,0.7), tw) * s * 1.4;
+  float neb = smoothstep(0.55, 0.95, fbm(rd * 1.8 + vec3(4.2,1.7,8.3)));
+  col += mix(vec3(0.05,0.02,0.10), vec3(0.02,0.05,0.11), fbm(rd*1.2+3.0)) * neb * 0.12;
   float mu = max(dot(rd, uLightDir), 0.0);
   col += uSunColor * pow(mu, 5000.0) * 60.0 * 0.02;
   return col;

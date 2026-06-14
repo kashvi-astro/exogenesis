@@ -145,26 +145,17 @@ vec3 shadeSurface(vec3 p, vec3 rd) {
   return lit;
 }
 
-// ---------- background ----------
+// ---------- background: clean deep space + soft sparse stars ----------
 vec3 background(vec3 rd) {
-  // starfield: hashed cells on the direction vector
-  vec3 col = vec3(0.0);
-  vec3 cell = floor(rd * 220.0);
-  float star = hash13(cell);
-  if (star > 0.9975) {
-    float tw = hash13(cell + 17.0);
-    float mag = pow((star - 0.9975) / 0.0025, 2.0);
-    vec3 tint = mix(vec3(0.7, 0.8, 1.0), vec3(1.0, 0.85, 0.7), tw);
-    col += tint * mag * 2.2;
-  }
-  // faint nebula
-  float neb = fbm(rd * 2.6 + vec3(4.2, 1.7, 8.3));
-  neb = pow(max(neb - 0.45, 0.0) * 1.8, 2.2);
-  vec3 nebCol = mix(vec3(0.18, 0.07, 0.32), vec3(0.05, 0.14, 0.30),
-                    fbm(rd * 1.3 + 3.0));
-  col += nebCol * neb * 0.30;
-
-  // the star itself + halo (bloom finishes the job)
+  vec3 col = mix(vec3(0.018, 0.028, 0.055), vec3(0.004, 0.006, 0.016), clamp(rd.y * 0.5 + 0.5, 0.0, 1.0));
+  vec3 gp = rd * 160.0;
+  vec3 cell = floor(gp);
+  vec3 fp = fract(gp) - 0.5;
+  float s = smoothstep(0.45, 0.0, length(fp)) * smoothstep(0.990, 1.0, hash13(cell));
+  float tw = hash13(cell + 17.0);
+  col += mix(vec3(0.75, 0.83, 1.0), vec3(1.0, 0.86, 0.7), tw) * s * 1.4;
+  float neb = smoothstep(0.55, 0.95, fbm(rd * 1.8 + vec3(4.2, 1.7, 8.3)));
+  col += mix(vec3(0.05, 0.02, 0.10), vec3(0.02, 0.05, 0.11), fbm(rd * 1.2 + 3.0)) * neb * 0.12;
   float mu = max(dot(rd, uLightDir), 0.0);
   col += uSunColor * (pow(mu, 6000.0) * 80.0 + pow(mu, 220.0) * 1.2) * uSunIntensity * 0.02;
   return col;
