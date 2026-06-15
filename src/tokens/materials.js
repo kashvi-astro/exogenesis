@@ -117,6 +117,7 @@ export function atmosphereUniforms(p, d) {
     uSurfaceMode: type, uSurfColA: type === 1 ? '#b8cbe0' : mix(base, '#ffffff', 0.3), uSurfColB: type === 1 ? '#27405e' : mix(base, '#000000', 0.5),
     uSunColor: star.sunColor, uSunIntensity: stripped ? star.sunIntensity * 0.85 : star.sunIntensity,
     uNightAmbient: 0.004, uViewSteps: 80, uLightSteps: 10, uLightDir: lightDir(112, 6), uSeed: planetSeed(p),
+    uRingInner: 1.35, uRingOuter: 2.3, uRingColor: d.Tsurf < 150 ? '#bcd0dc' : '#cbb188', uRingOpacity: type === 1 ? 0.85 : 0.0,
   };
 }
 
@@ -152,6 +153,7 @@ export function surfaceUniforms(p, d) {
     uAtmoCol: rimColor(p, stripped), uSeaLevel: sea, uCloudAmount: cloudAmt, uCloudSharp: 0.55,
     uBandFreq: band, uWarp: warp, uStorm: storm, uBumpStrength: 1.2, uRimStrength: rimS, uRAtmo: 1.05,
     uLightDir: lightDir(112, 6), uSeed: planetSeed(p),
+    uRingInner: 1.35, uRingOuter: 2.3, uRingColor: d.Tsurf < 150 ? '#bcd0dc' : '#cbb188', uRingOpacity: type === 1 ? 0.85 : 0.0,
   };
 }
 

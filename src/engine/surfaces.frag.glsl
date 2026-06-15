@@ -36,6 +36,10 @@ uniform float uBumpStrength;
 uniform float uRimStrength;
 uniform float uRAtmo;
 uniform vec3  uSeed;   // per-planet noise offset → unique terrain/clouds/bands
+uniform float uRingInner;
+uniform float uRingOuter;
+uniform vec3  uRingColor;
+uniform float uRingOpacity;
 
 const float PI = 3.14159265359;
 
@@ -76,15 +80,17 @@ vec3 rotY(vec3 p, float a) { float c=cos(a), s=sin(a); return vec3(c*p.x + s*p.z
 vec3 camPos() { return uCamWorld[3].xyz; }
 
 vec3 background(vec3 rd) {
-  vec3 col = mix(vec3(0.018,0.028,0.055), vec3(0.004,0.006,0.016), clamp(rd.y*0.5+0.5,0.0,1.0));
-  vec3 gp = rd * 160.0;
-  vec3 cell = floor(gp);
-  vec3 fp = fract(gp) - 0.5;
-  float s = smoothstep(0.45, 0.0, length(fp)) * smoothstep(0.990, 1.0, hash13(cell));
-  float tw = hash13(cell + 17.0);
-  col += mix(vec3(0.75,0.83,1.0), vec3(1.0,0.86,0.7), tw) * s * 1.4;
-  float neb = smoothstep(0.55, 0.95, fbm(rd * 1.8 + vec3(4.2,1.7,8.3)));
-  col += mix(vec3(0.05,0.02,0.10), vec3(0.02,0.05,0.11), fbm(rd*1.2+3.0)) * neb * 0.12;
+  vec3 col = mix(vec3(0.016,0.024,0.05), vec3(0.003,0.005,0.014), clamp(rd.y*0.5+0.5,0.0,1.0));
+  float band = exp(-rd.y*rd.y*7.0);
+  col += vec3(0.05,0.06,0.10) * band * smoothstep(0.45,0.95, fbm(rd*2.4+vec3(2.0))) * 0.5;
+  { vec3 gp=rd*160.0; vec3 cell=floor(gp); vec3 fp=fract(gp)-0.5;
+    float s=smoothstep(0.45,0.0,length(fp))*smoothstep(0.991,1.0,hash13(cell));
+    col += mix(vec3(0.8,0.86,1.0),vec3(1.0,0.85,0.7),hash13(cell+17.0))*s*1.5; }
+  { vec3 gp=rd*340.0; vec3 cell=floor(gp); vec3 fp=fract(gp)-0.5;
+    float s=smoothstep(0.4,0.0,length(fp))*smoothstep(0.986,1.0,hash13(cell+5.0));
+    col += vec3(0.7,0.78,0.95)*s*0.5; }
+  float neb = smoothstep(0.5, 0.95, fbm(rd * 1.8 + vec3(4.2,1.7,8.3)));
+  col += mix(vec3(0.06,0.02,0.12), vec3(0.02,0.06,0.13), fbm(rd*1.1+3.0)) * neb * 0.13;
   col += uSunColor * pow(max(dot(rd, uLightDir),0.0), 5000.0) * 60.0 * 0.02;
   return col;
 }
@@ -204,6 +210,27 @@ vec3 shadeSurface(vec3 p) {
   return lit;
 }
 
+// Equatorial ring (gas giants). Plane y=0 in planet space; cheap (no marching).
+vec4 ringSample(vec3 ro, vec3 rd, out float ringT) {
+  ringT = 1e9;
+  if (uRingOpacity <= 0.0 || abs(rd.y) < 1e-4) return vec4(0.0);
+  float t = -ro.y / rd.y;
+  if (t <= 0.0) return vec4(0.0);
+  vec3 rp = ro + rd * t;
+  float rr = length(rp);
+  if (rr < uRingInner || rr > uRingOuter) return vec4(0.0);
+  ringT = t;
+  float u = (rr - uRingInner) / (uRingOuter - uRingInner);
+  float bands = 0.5 + 0.5 * sin(u * 90.0);
+  float dens = clamp(bands * (0.5 + fbm(vec3(rr * 26.0, 0.0, 0.0))), 0.0, 1.0);
+  dens *= smoothstep(0.02, 0.06, abs(u - 0.34));   // Cassini-like gaps
+  dens *= smoothstep(0.02, 0.06, abs(u - 0.64));
+  float along = dot(rp, uLightDir);
+  vec3 perp = rp - uLightDir * along;
+  float shadow = (along < 0.0 && length(perp) < 1.0) ? 0.18 : 1.0;
+  return vec4(uRingColor * shadow, dens * uRingOpacity);
+}
+
 void main() {
   vec2 px = gl_FragCoord.xy / uResolution;
   vec3 ro = camPos();
@@ -211,12 +238,12 @@ void main() {
   vec3 rd = normalize((uCamWorld * vec4(pv.xyz, 1.0)).xyz - ro);
 
   vec2 hit = raySphere(ro, rd, 1.0);
+  bool planetHit = hit.x > 0.0 && hit.x < hit.y;
   vec3 color;
-  if (hit.x > 0.0 && hit.x < hit.y) {
+  if (planetHit) {
     color = shadeSurface(ro + rd * hit.x);
   } else {
     color = background(rd);
-    // silhouette halo
     float tca = max(dot(-ro, rd), 0.0);
     vec3 pca = ro + rd * tca;
     float dca = length(pca);
@@ -226,6 +253,10 @@ void main() {
       color += uAtmoCol * glow * (0.2 + 0.8 * lf) * 0.9;
     }
   }
+
+  // composite ring (in front of planet, or over the background)
+  float ringT; vec4 ring = ringSample(ro, rd, ringT);
+  if (ring.a > 0.0 && (!planetHit || ringT < hit.x)) color = mix(color, ring.rgb, ring.a);
 
   color += (hash13(vec3(gl_FragCoord.xy, 1.0)) - 0.5) / 255.0;
   gl_FragColor = vec4(max(color, 0.0), 1.0);

@@ -15,6 +15,7 @@ $('status').textContent = 'engine online · real-time render';
 
 let currentView = 'surface';
 const VIEW_UNIFORMS = { surface: surfaceUniforms, atmosphere: atmosphereUniforms, cutaway: cutawayUniforms };
+const LOW_POWER = window.matchMedia('(max-width: 820px)').matches || (navigator.hardwareConcurrency || 8) <= 4;
 let latest = null, reportShown = false;
 
 function readInputs() {
@@ -89,7 +90,9 @@ function update() {
   const analog = nearestExoplanet(p);
 
   // drive the planet from material tokens, for the current view
-  planet.apply(currentView, VIEW_UNIFORMS[currentView](p, d));
+  const vals = VIEW_UNIFORMS[currentView](p, d);
+  if (LOW_POWER && currentView === 'atmosphere') { vals.uViewSteps = 44; vals.uLightSteps = 6; } // mobile: lighter march
+  planet.apply(currentView, vals);
   planet.setSpin(Math.min(0.6, Math.max(0.02, 0.12 * 24 / p.rotation))); // rotation period → spin
   $('planetCap').textContent = captionFor(p, d);
 

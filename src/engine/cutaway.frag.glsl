@@ -76,15 +76,17 @@ vec3 camPos() { return uCamWorld[3].xyz; }
 
 // ---------- background ----------
 vec3 background(vec3 rd) {
-  vec3 col = mix(vec3(0.018,0.028,0.055), vec3(0.004,0.006,0.016), clamp(rd.y*0.5+0.5,0.0,1.0));
-  vec3 gp = rd * 160.0;
-  vec3 cell = floor(gp);
-  vec3 fp = fract(gp) - 0.5;
-  float s = smoothstep(0.45, 0.0, length(fp)) * smoothstep(0.990, 1.0, hash13(cell));
-  float tw = hash13(cell + 17.0);
-  col += mix(vec3(0.75,0.83,1.0), vec3(1.0,0.86,0.7), tw) * s * 1.4;
-  float neb = smoothstep(0.55, 0.95, fbm(rd * 1.8 + vec3(4.2,1.7,8.3)));
-  col += mix(vec3(0.05,0.02,0.10), vec3(0.02,0.05,0.11), fbm(rd*1.2+3.0)) * neb * 0.12;
+  vec3 col = mix(vec3(0.016,0.024,0.05), vec3(0.003,0.005,0.014), clamp(rd.y*0.5+0.5,0.0,1.0));
+  float band = exp(-rd.y*rd.y*7.0);
+  col += vec3(0.05,0.06,0.10) * band * smoothstep(0.45,0.95, fbm(rd*2.4+vec3(2.0))) * 0.5;
+  { vec3 gp=rd*160.0; vec3 cell=floor(gp); vec3 fp=fract(gp)-0.5;
+    float s=smoothstep(0.45,0.0,length(fp))*smoothstep(0.991,1.0,hash13(cell));
+    col += mix(vec3(0.8,0.86,1.0),vec3(1.0,0.85,0.7),hash13(cell+17.0))*s*1.5; }
+  { vec3 gp=rd*340.0; vec3 cell=floor(gp); vec3 fp=fract(gp)-0.5;
+    float s=smoothstep(0.4,0.0,length(fp))*smoothstep(0.986,1.0,hash13(cell+5.0));
+    col += vec3(0.7,0.78,0.95)*s*0.5; }
+  float neb = smoothstep(0.5, 0.95, fbm(rd * 1.8 + vec3(4.2,1.7,8.3)));
+  col += mix(vec3(0.06,0.02,0.12), vec3(0.02,0.06,0.13), fbm(rd*1.1+3.0)) * neb * 0.13;
   float mu = max(dot(rd, uLightDir), 0.0);
   col += uSunColor * pow(mu, 5000.0) * 60.0 * 0.02;
   return col;

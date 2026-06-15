@@ -34,7 +34,8 @@ const UNIFORMS = {
     uSunIntensity: { value: 16 }, uAtmoHeight: { value: 0.12 }, uHr: { value: 0.04 }, uHm: { value: 0.028 },
     uBetaR: { value: V3() }, uBetaM: { value: V3() }, uBetaA: { value: V3() }, uMieG: { value: 0.76 },
     uViewSteps: { value: 80 }, uLightSteps: { value: 10 }, uSurfaceMode: { value: 1 },
-    uSurfColA: { value: C('#27405e') }, uSurfColB: { value: C('#b8cbe0') }, uNightAmbient: { value: 0.004 } }),
+    uSurfColA: { value: C('#27405e') }, uSurfColB: { value: C('#b8cbe0') }, uNightAmbient: { value: 0.004 },
+    uRingInner: { value: 1.35 }, uRingOuter: { value: 2.3 }, uRingColor: { value: C('#cbb188') }, uRingOpacity: { value: 0 } }),
   surface: () => ({ ...common(),
     uAmbient: { value: 0.05 }, uNightAmbient: { value: 0.02 }, uSurfaceType: { value: 0 },
     uYaw: { value: 0 }, uCloudYaw: { value: 0.6 },
@@ -42,7 +43,8 @@ const UNIFORMS = {
     uColD: { value: C('#9c8a54') }, uColE: { value: C('#eef6ff') }, uCloudCol: { value: C('#eef4ff') },
     uAtmoCol: { value: C('#8ab8ff') }, uSeaLevel: { value: 0.5 }, uCloudAmount: { value: 0.4 },
     uCloudSharp: { value: 0.55 }, uBandFreq: { value: 8 }, uWarp: { value: 0.5 }, uStorm: { value: 0 },
-    uBumpStrength: { value: 1.2 }, uRimStrength: { value: 0.6 }, uRAtmo: { value: 1.05 } }),
+    uBumpStrength: { value: 1.2 }, uRimStrength: { value: 0.6 }, uRAtmo: { value: 1.05 },
+    uRingInner: { value: 1.35 }, uRingOuter: { value: 2.3 }, uRingColor: { value: C('#cbb188') }, uRingOpacity: { value: 0 } }),
   cutaway: () => ({ ...common(),
     uAmbient: { value: 0.14 }, uRAtmo: { value: 1.06 }, uRSurface: { value: 1.0 }, uRCrustBase: { value: 0.86 },
     uRMantleBase: { value: 0.45 }, uRInnerCore: { value: 0.22 },
@@ -58,7 +60,9 @@ export function initPlanet(container) {
   const H = () => container.clientHeight || window.innerHeight;
 
   const renderer = new THREE.WebGLRenderer({ antialias: false, preserveDrawingBuffer: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  // mobile / low-core devices: cap pixel ratio so the raymarcher stays smooth
+  const lowPower = window.innerWidth < 820 || (navigator.hardwareConcurrency || 8) <= 4;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, lowPower ? 1.25 : 2));
   renderer.setSize(W(), H());
   renderer.toneMapping = THREE.AgXToneMapping;
   renderer.toneMappingExposure = 0.88;   // tamed so lit surfaces don't clip to white
