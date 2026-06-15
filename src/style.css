@@ -21,6 +21,7 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
   color: var(--text); font-family: var(--sans); font-size: 15px; line-height: 1.6; min-height: 100vh;
+  overflow-x: hidden;   /* never allow a horizontal scrollbar on phones */
   background-color: var(--bg);
   background-image:
     linear-gradient(rgba(125,150,200,0.035) 1px, transparent 1px),
@@ -57,6 +58,13 @@ body {
   .layout, .biosphere { padding-left: 16px; padding-right: 16px; }
   .panel, .biosphere { padding: 18px 16px 20px; }
   .fs-btn { top: 56px; }
+  .topbar { padding: 14px 18px; }
+  .brand { font-size: 13px; letter-spacing: 0.2em; }
+  .back { font-size: 12px; }
+  .view-toggle button { font-size: 0.66rem; padding: 8px 5px; letter-spacing: 0.03em; }
+  .score-card { flex-wrap: wrap; justify-content: center; text-align: center; }
+  .score-text { width: 100%; }
+  .m-value { font-size: 1.4rem; }
 }
 
 .panel, .biosphere {
@@ -128,7 +136,7 @@ input[type="range"]::-webkit-slider-thumb { -webkit-appearance: none; width: 17p
 .score-desc { font-family: var(--mono); font-size: 0.66rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-top: 5px; }
 
 /* metrics */
-.metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
 .metric { padding: 14px 16px; border: 1px solid var(--line); border-radius: 10px; background: rgba(0,0,0,0.22); }
 .m-label { display: flex; align-items: center; gap: 8px; font-size: 0.64rem; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
 .m-value { font-family: var(--mono); font-size: 1.5rem; margin-top: 6px; } .m-value.ok { color: var(--ok); } .m-value.warn { color: var(--warn); } .m-value.bad { color: var(--bad); }
