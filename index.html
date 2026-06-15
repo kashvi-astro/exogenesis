@@ -86,7 +86,7 @@
       <div class="panel-head"><span class="idx">02</span><h2>Derived Quantities</h2></div>
       <div id="habitability"></div>
       <div class="metrics" id="metrics"></div>
-      <p class="note">Items tagged <em>rigorous</em> come straight from standard equations; <em>estimate</em> items use simplified proxy models.</p>
+      <p class="note">Items tagged <em>rigorous</em> come straight from standard equations; <em>estimate</em> items use simplified proxy models. Equilibrium temperature uses a class-typical stellar luminosity and a fixed albedo (0.30); atmospheric pressure is not modelled. Full breakdown in <em>Model Assumptions</em> below.</p>
     </section>
   </main>
 
@@ -100,6 +100,22 @@
     <h3 class="sub">Field report</h3>
     <button class="report-btn" id="reportBtn">Generate field report</button>
     <div class="field-report" id="fieldReport"></div>
+  </section>
+
+  <!-- HONESTY: what's rigorous vs estimated vs illustrative vs speculative -->
+  <section class="biosphere accuracy">
+    <div class="panel-head"><span class="idx">04</span><h2>Model Assumptions &amp; Accuracy</h2></div>
+    <p class="bio-summary">In the spirit of scientific honesty, here is exactly what this tool computes rigorously, what it estimates with simplified models, and what is illustrative or speculative — nothing here claims to be more certain than it is.</p>
+    <div class="acc-grid">
+      <div class="acc"><span class="tier rigorous">rigorous</span><b>Surface gravity &amp; escape velocity</b><span>Exact Newtonian formulas (g = M/R², v = √(2GM/R)).</span></div>
+      <div class="acc"><span class="tier rigorous">rigorous</span><b>Equilibrium temperature</b><span>Standard formula T = 278·L<sup>¼</sup>·d<sup>−½</sup>·(1−A)<sup>¼</sup>. The formula is exact, but stellar luminosity is a <em>class-typical</em> value and albedo is fixed at 0.30.</span></div>
+      <div class="acc"><span class="tier rigorous">grounded</span><b>Atmosphere retention (cosmic shoreline)</b><span>Escape velocity vs stellar radiation, scaling as v⁴ — consistent with the Zahnle &amp; Catling (2017) relation; the threshold constant is tuned.</span></div>
+      <div class="acc"><span class="tier estimate">estimate</span><b>Greenhouse warming</b><span>A simplified heuristic from gas fractions — <em>not</em> full radiative transfer. Atmospheric pressure is not modelled (composition is mole-fractions only).</span></div>
+      <div class="acc"><span class="tier estimate">estimate</span><b>Radiation level &amp; habitability index</b><span>Proxy models with hand-tuned, Earth-referenced weightings. The habitability index is biased toward Earth-like, water-and-carbon life.</span></div>
+      <div class="acc"><span class="tier illustrative">illustrative</span><b>Planet visuals</b><span>Surfaces, clouds, rings and the interior cutaway are physically-motivated <em>artwork</em>, not measured imagery. Atmosphere colour does follow real optics (blue Rayleigh scattering; methane absorbs red → teal).</span></div>
+      <div class="acc"><span class="tier speculative">speculative</span><b>Biosphere &amp; field report</b><span>Informed astrobiology hypotheses, always possibility-framed — never a claim that life exists.</span></div>
+      <div class="acc"><span class="tier rigorous">real data</span><b>Nearest known analog</b><span>NASA Exoplanet Archive, matched on measured size, mass, orbit &amp; star type — <em>not</em> atmosphere (which is unmeasured for most real worlds).</span></div>
+    </div>
   </section>
 
   <footer class="foot">

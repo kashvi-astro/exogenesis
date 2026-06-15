@@ -54,8 +54,12 @@ function glyph(node) {
 // Short honest descriptor under the globe (e.g. "temperate ocean · nitrogen atmosphere")
 function captionFor(p, d) {
   const T = d.Tsurf, stripped = d.retention === 'stripped';
+  const a = p.atmosphere, tot = Math.max(1, a.N2 + a.O2 + a.CO2 + a.CH4 + a.H2 + a.H2O);
+  const giant = (a.H2 / tot) + Math.max(0, p.radius - 2) * 0.3; // matches the render's body type
   let tw;
   if (stripped && T < 700) tw = T < 273 ? 'frozen rock' : 'bare rock';
+  else if (!stripped && giant > 0.4) tw = 'gas giant';
+  else if (!stripped && (T < 240 || a.H2O / tot > 0.35)) tw = 'ice giant';
   else if (T >= 700) tw = 'molten';
   else if (T >= 400) tw = 'scorched rock';
   else if (T >= 320) tw = 'hot desert';
