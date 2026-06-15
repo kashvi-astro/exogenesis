@@ -34,6 +34,7 @@ uniform float uCoreEmissive;
 uniform float uRimStrength;
 uniform float uBoundaryGlow;
 uniform float uNightAmbient;
+uniform vec3  uSeed;   // per-planet noise offset
 
 const float PI = 3.14159265359;
 
@@ -148,8 +149,8 @@ vec3 shadeCore(vec3 p) {
 vec3 shadeSurface(vec3 p) {
   vec3 n = normalize(p);
   vec3 q = p * 4.0;
-  float w = fbm(q + 2.0 * fbm(q * 0.5));
-  float detail = fbm(q * 6.0);
+  float w = fbm(q + uSeed + 2.0 * fbm(q * 0.5 + uSeed));
+  float detail = fbm(q * 6.0 + uSeed);
   vec3 alb = mix(uSurfA, uSurfB, smoothstep(0.35, 0.75, w));
   alb *= 0.75 + 0.5 * detail;
   float e = 0.02;

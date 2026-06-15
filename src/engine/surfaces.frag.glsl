@@ -35,6 +35,7 @@ uniform float uStorm;
 uniform float uBumpStrength;
 uniform float uRimStrength;
 uniform float uRAtmo;
+uniform vec3  uSeed;   // per-planet noise offset → unique terrain/clouds/bands
 
 const float PI = 3.14159265359;
 
@@ -89,7 +90,7 @@ vec3 background(vec3 rd) {
 }
 
 // ---------- terrestrial ----------
-float terrHeight(vec3 sp) { return fbm(sp * 2.6 + 2.0 * fbm(sp * 1.3)); }
+float terrHeight(vec3 sp) { return fbm(sp * 2.6 + uSeed + 2.0 * fbm(sp * 1.3 + uSeed)); }
 
 vec3 terrestrial(vec3 sp, inout vec3 n, out float water) {
   float h = terrHeight(sp);
@@ -120,16 +121,16 @@ vec3 terrestrial(vec3 sp, inout vec3 n, out float water) {
 
 float clouds(vec3 sp) {
   vec3 q = rotY(sp, uCloudYaw);
-  float c = fbm(q * 3.2 + 1.7 * fbm(q * 1.6));
+  float c = fbm(q * 3.2 + uSeed + 1.7 * fbm(q * 1.6 + uSeed));
   return smoothstep(uCloudSharp, 1.0, c) * uCloudAmount;
 }
 
 // ---------- gas / ice giant bands ----------
 vec3 giantBands(vec3 sp, float softness) {
   // domain warp: turn flat latitude bands into turbulent flowing ones
-  vec3 w1 = fbm3(sp * 1.8) - 0.5;
+  vec3 w1 = fbm3(sp * 1.8 + uSeed) - 0.5;
   vec3 q = sp + w1 * uWarp;
-  vec3 w2 = fbm3(q * 5.5) - 0.5;
+  vec3 w2 = fbm3(q * 5.5 + uSeed) - 0.5;
   q += w2 * uWarp * 0.35;
 
   float lat = q.y;

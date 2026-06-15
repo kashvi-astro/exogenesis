@@ -1,37 +1,14 @@
 /*
-  materials.js — THE TOKEN SPINE.
-  Scientific material tokens: each atmosphere/star carries physical params,
-  not just a colour. One source of truth feeding BOTH the UI and the live
-  shader. inputsToEngine() maps user inputs + computed physics → shader uniforms.
+  materials.js — THE TOKEN SPINE (continuous edition).
+  Instead of snapping to a few fixed archetypes, every shader uniform is a
+  CONTINUOUS function of the exact composition + physics:
+    • atmosphere scattering/absorption = weighted blend of per-gas optics
+    • shell thickness = real scale height  H ∝ T / (molar mass · gravity)
+    • surface colour = a smooth temperature colormap (no banding)
+    • a per-planet SEED offsets the noise so every world is unique
+  → effectively unlimited, one-of-a-kind planets, with no threshold jumps.
 */
 
-// Atmosphere archetypes (scattering/absorption coefficients in 1/planet-radius).
-// Colours fall out of the physics (methane absorbs red → teal, etc.).
-export const ATMOSPHERES = {
-  thin:       { label: 'Thin', atmoHeight: 0.035, Hr: 0.012, Hm: 0.010,
-                betaR: [4.0, 2.6, 1.6], betaRScale: 1.6, betaM: [2.0, 1.8, 1.5], betaMScale: 1.2,
-                mieG: 0.70, betaA: [0, 0, 0], betaAScale: 0, surfaceMode: 0, swatch: '#9fb8c4' },
-  n2o2:       { label: 'Nitrogen–Oxygen', atmoHeight: 0.05, Hr: 0.020, Hm: 0.014,
-                betaR: [5.5, 12.0, 24.0], betaRScale: 0.62, betaM: [3.0, 3.0, 3.2], betaMScale: 0.5,
-                mieG: 0.70, betaA: [0, 0, 0], betaAScale: 0, surfaceMode: 0, swatch: '#6fa8e0' },
-  h2he:       { label: 'H₂/He', atmoHeight: 0.12, Hr: 0.040, Hm: 0.028,
-                betaR: [5.8, 13.5, 33.1], betaRScale: 0.55, betaM: [4.0, 4.0, 4.0], betaMScale: 0.5,
-                mieG: 0.76, betaA: [0, 0, 0], betaAScale: 0, surfaceMode: 1, swatch: '#5a9bd4' },
-  watervapor: { label: 'Water vapour', atmoHeight: 0.10, Hr: 0.034, Hm: 0.030,
-                betaR: [4.5, 12.0, 22.0], betaRScale: 0.7, betaM: [8.0, 9.0, 9.5], betaMScale: 0.9,
-                mieG: 0.62, betaA: [0, 0, 0], betaAScale: 0, surfaceMode: 2, swatch: '#5bbcd6' },
-  co2:        { label: 'CO₂', atmoHeight: 0.055, Hr: 0.018, Hm: 0.014,
-                betaR: [9.0, 7.0, 4.5], betaRScale: 1.1, betaM: [11.0, 9.0, 6.5], betaMScale: 1.3,
-                mieG: 0.72, betaA: [0, 0, 0], betaAScale: 0, surfaceMode: 0, swatch: '#46b59a' },
-  methane:    { label: 'Methane', atmoHeight: 0.11, Hr: 0.038, Hm: 0.030,
-                betaR: [3.5, 9.5, 9.0], betaRScale: 0.8, betaM: [3.0, 4.5, 4.5], betaMScale: 0.6,
-                mieG: 0.70, betaA: [8.0, 1.6, 0.2], betaAScale: 0.8, surfaceMode: 2, swatch: '#d18a4e' },
-  exotic:     { label: 'Exotic haze', atmoHeight: 0.13, Hr: 0.045, Hm: 0.050,
-                betaR: [7.0, 2.5, 9.5], betaRScale: 0.7, betaM: [9.5, 3.5, 11.0], betaMScale: 0.9,
-                mieG: 0.84, betaA: [0.6, 7.5, 0.4], betaAScale: 0.9, surfaceMode: 2, swatch: '#a96fd0' },
-};
-
-// Star light tokens (tint + base brightness)
 export const STARS = {
   M: { sunColor: '#ffd3b0', sunIntensity: 13 },
   K: { sunColor: '#ffe7c4', sunIntensity: 14 },
@@ -39,116 +16,158 @@ export const STARS = {
   F: { sunColor: '#eef2ff', sunIntensity: 18 },
   A: { sunColor: '#dde7ff', sunIntensity: 20 },
 };
-
-// Per-gas display colours (UI swatches/dots)
 export const GAS_COLORS = {
   N2: '#6f8fb0', O2: '#5fb0d0', CO2: '#46b59a', CH4: '#d18a4e', H2: '#7f9ad4', H2O: '#5bbcd6',
 };
 
-// Pick the atmosphere archetype that best matches the composition + state.
-export function selectArchetype(inputs, physics) {
-  if (physics.retention === 'stripped') return 'thin';
-  const a = inputs.atmosphere;
-  if (a.H2 >= 40) return 'h2he';
-  if (a.CH4 >= 15 && a.CO2 >= 10) return 'exotic';
-  if (a.CH4 >= 15) return 'methane';
-  if (a.CO2 >= 40) return 'co2';
-  if (a.H2O >= 30) return 'watervapor';
-  if (a.O2 >= 8 || a.N2 >= 45) return 'n2o2';
-  return 'thin';
+// Per-gas optical properties: molar mass, Rayleigh strength, red/green/blue absorption.
+const GAS = {
+  N2:  { M: 28, ray: 1.0,  abs: [0, 0, 0] },
+  O2:  { M: 32, ray: 1.1,  abs: [0, 0, 0] },
+  CO2: { M: 44, ray: 2.4,  abs: [0, 0, 0] },
+  CH4: { M: 16, ray: 2.0,  abs: [9, 2, 0.4] },   // absorbs red → world reads teal
+  H2:  { M: 2,  ray: 0.25, abs: [0, 0, 0] },
+  H2O: { M: 18, ray: 1.4,  abs: [0, 0, 0] },      // feeds the Mie haze term
+};
+
+// ---- colour helpers (continuous) ----
+const hx = (c) => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
+const toHex = (a) => '#' + a.map((v) => Math.max(0, Math.min(255, Math.round(v))).toString(16).padStart(2, '0')).join('');
+const mix = (a, b, t) => { const A = hx(a), B = hx(b); return toHex([A[0] + (B[0] - A[0]) * t, A[1] + (B[1] - A[1]) * t, A[2] + (B[2] - A[2]) * t]); };
+
+// smooth temperature → base surface colour (no bands)
+const TEMP_STOPS = [
+  [100, '#eaf3ff'], [235, '#bcd2e6'], [273, '#86a6ad'], [300, '#74804f'],
+  [340, '#b58a55'], [430, '#9c4a25'], [700, '#ff5a2a'], [1300, '#ffd9a0'],
+];
+function colormap(T) {
+  if (T <= TEMP_STOPS[0][0]) return TEMP_STOPS[0][1];
+  for (let i = 1; i < TEMP_STOPS.length; i++) {
+    if (T <= TEMP_STOPS[i][0]) {
+      const [t0, c0] = TEMP_STOPS[i - 1], [t1, c1] = TEMP_STOPS[i];
+      return mix(c0, c1, (T - t0) / (t1 - t0));
+    }
+  }
+  return TEMP_STOPS[TEMP_STOPS.length - 1][1];
+}
+function surfaceBase(T, water, stripped) {
+  if (stripped) return '#6e6e6e';
+  let base = colormap(T);
+  if (T >= 265 && T <= 375 && water > 0) base = mix(base, '#1f5f9e', Math.min(1, water / 65)); // ocean blend
+  return base;
 }
 
-// Surface colours from temperature (and water for temperate worlds).
-function tempColors(Tsurf, water, stripped) {
-  if (stripped && Tsurf < 700) return ['#c9c9c9', '#343434'];
-  if (Tsurf >= 700) return ['#ffcaa0', '#5e1100'];
-  if (Tsurf >= 400) return ['#caa06a', '#3a1a0e'];
-  if (Tsurf >= 320) return ['#d8b98c', '#6b4a2a'];
-  if (Tsurf >= 273) return water >= 25 ? ['#cfeaff', '#143f63'] : ['#d8c6a6', '#4e3a22'];
-  if (Tsurf >= 235) return ['#dcebf5', '#56789a'];
-  return ['#f0f7ff', '#9fb3c8'];
+// continuous atmospheric rim colour from composition
+function rimColor(p, stripped) {
+  if (stripped) return '#20303a';
+  const a = p.atmosphere, tot = Math.max(1, sum(a));
+  let c = '#7fb0ff';
+  c = mix(c, '#46d6c0', Math.min(1, (a.CH4 / tot) * 2.2));            // methane teal
+  c = mix(c, '#e8d6a0', Math.min(1, (a.CO2 / tot) * 1.6));            // CO₂ amber
+  c = mix(c, '#cf8ad0', Math.min(1, (a.CH4 / tot) * (a.CO2 / tot) * 6)); // both → exotic violet
+  return c;
 }
 
-// Atmospheric rim colour per archetype (for the surface & cutaway shaders)
-const RIM = { thin: '#9fb8c4', n2o2: '#8ab8ff', h2he: '#7fb0ff', watervapor: '#bfe0ff',
-              co2: '#e8d6a0', methane: '#5fd6c0', exotic: '#cf8ad0' };
-
+const sum = (a) => a.N2 + a.O2 + a.CO2 + a.CH4 + a.H2 + a.H2O;
 function lightDir(azDeg, elDeg) {
   const az = azDeg * Math.PI / 180, el = elDeg * Math.PI / 180;
   return [Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az)];
 }
 
-// ---- ATMOSPHERE shader uniforms (single-scattering archetypes) ----
+// per-planet seed → 3 noise offsets, so every world's terrain/clouds are unique
+function planetSeed(p) {
+  const a = p.atmosphere;
+  const h = p.star.charCodeAt(0) * 7 + p.mass * 13.1 + p.radius * 29.7 + p.distance * 53.3 + p.rotation * 0.071
+    + a.N2 * 1.3 + a.O2 * 2.7 + a.CO2 * 3.9 + a.CH4 * 5.1 + a.H2 * 6.3 + a.H2O * 7.7;
+  const r = (x) => { const v = Math.sin(x) * 43758.5453; return v - Math.floor(v); };
+  return [r(h) * 24, r(h * 1.7 + 11) * 24, r(h * 2.3 + 27) * 24];
+}
+
+// shared continuous descriptors
+function giantness(p) { const a = p.atmosphere, tot = Math.max(1, sum(a)); return (a.H2 / tot) + Math.max(0, p.radius - 2.0) * 0.3; }
+function bodyType(p, d) {
+  if (d.retention === 'stripped') return 0;
+  if (giantness(p) > 0.4) return 1;                                  // gas giant
+  const a = p.atmosphere, tot = Math.max(1, sum(a));
+  if (d.Tsurf < 240 || a.H2O / tot > 0.35) return 2;                 // ice giant
+  return 0;                                                          // terrestrial
+}
+
+// ---- ATMOSPHERE shader uniforms (continuous scattering from composition) ----
 export function atmosphereUniforms(p, d) {
-  const key = selectArchetype(p, d);
-  const atm = ATMOSPHERES[key];
   const star = STARS[p.star] || STARS.G;
   const stripped = d.retention === 'stripped';
-  let A, B;
-  if (key === 'h2he') { A = '#27405e'; B = '#b8cbe0'; }
-  else { [A, B] = tempColors(d.Tsurf, p.water, stripped); }
-  const s = (arr, k) => arr.map((v) => v * k);
+  const a = p.atmosphere, tot = Math.max(1, sum(a));
+  let M = 0, ray = 0, abs = [0, 0, 0];
+  for (const g in a) { const f = a[g] / tot, t = GAS[g]; M += f * t.M; ray += f * t.ray; abs[0] += f * t.abs[0]; abs[1] += f * t.abs[1]; abs[2] += f * t.abs[2]; }
+  const mie = 0.4 + (a.H2O / tot) * 4.0;
+  let Hr = 0.03 * (d.Tsurf / 255) * (29 / Math.max(2, M)) / Math.max(0.2, d.gravity);
+  Hr = Math.min(0.09, Math.max(0.008, Hr));
+  const fill = stripped ? 0 : Math.min(1.2, tot / 100);
+  const atmoHeight = stripped ? 0.012 : Math.min(0.16, Math.max(0.03, Hr * 3.2 * fill));
+  const k = 9.0 * ray * fill;
+  const type = bodyType(p, d);
+  const base = type === 1 ? '#27405e' : surfaceBase(d.Tsurf, p.water, stripped);
   return {
-    uAtmoHeight: stripped ? 0.012 : atm.atmoHeight, uHr: atm.Hr, uHm: atm.Hm,
-    uBetaR: s(atm.betaR, atm.betaRScale), uBetaM: s(atm.betaM, atm.betaMScale), uBetaA: s(atm.betaA, atm.betaAScale),
-    uMieG: atm.mieG, uSurfaceMode: atm.surfaceMode, uSurfColA: A, uSurfColB: B,
+    uAtmoHeight: atmoHeight, uHr: Hr, uHm: Hr * 0.8,
+    uBetaR: [0.30 * k, 0.70 * k, 1.7 * k],
+    uBetaM: [mie * fill, mie * fill, mie * fill * 1.05],
+    uBetaA: [abs[0] * 0.9, abs[1] * 0.9, abs[2] * 0.9],
+    uMieG: 0.6 + 0.25 * (a.H2O / tot),
+    uSurfaceMode: type, uSurfColA: type === 1 ? '#b8cbe0' : mix(base, '#ffffff', 0.3), uSurfColB: type === 1 ? '#27405e' : mix(base, '#000000', 0.5),
     uSunColor: star.sunColor, uSunIntensity: stripped ? star.sunIntensity * 0.85 : star.sunIntensity,
-    uNightAmbient: 0.004, uViewSteps: 80, uLightSteps: 10, uLightDir: lightDir(112, 6),
+    uNightAmbient: 0.004, uViewSteps: 80, uLightSteps: 10, uLightDir: lightDir(112, 6), uSeed: planetSeed(p),
   };
 }
 
-// ---- SURFACE shader uniforms (continents/oceans/clouds, bands, storms) ----
+// ---- SURFACE shader uniforms (continuous colours + per-planet seed) ----
 export function surfaceUniforms(p, d) {
   const star = STARS[p.star] || STARS.G;
   const stripped = d.retention === 'stripped';
-  const a = p.atmosphere;
-  const key = selectArchetype(p, d);
-  const atmoCol = stripped ? '#20303a' : (RIM[key] || '#8ab8ff');
+  const a = p.atmosphere, tot = Math.max(1, sum(a));
+  const type = bodyType(p, d);
+  let colA, colB, colC, colD, colE, sea, cloudAmt, storm = 0, band = 8, warp = 0.5, rimS = 0.6;
 
-  let type, colA, colB, colC, colD, colE, sea = 0.5, cloudAmt = 0, storm = 0, band = 8, warp = 0.5, rim = 0.6;
-  const cloudCol = '#eef4ff';
-
-  if (key === 'h2he' || (p.radius > 2.2 && p.mass > 15)) {
-    type = 1; // gas giant — turbulent bands + red storm
-    colA = '#3a4f74'; colB = '#9fb6d6'; colC = '#c8d6ea'; colD = '#e7eef8'; colE = '#d9683a';
-    band = 16; warp = 0.6; storm = 1.0; rim = 0.5;
-  } else if (key === 'methane' || key === 'watervapor' || d.Tsurf < 240) {
-    type = 2; // ice giant — soft teal banding, white storm
-    colA = '#1b4f5e'; colB = '#3f93a6'; colC = '#7fc3cf'; colD = '#cfeef2'; colE = '#ffffff';
-    band = 10; warp = 0.4; storm = 0.5; rim = 0.6;
-  } else {
-    type = 0; // terrestrial
-    const veg = p.star === 'M' ? '#5a2e2e' : (p.star === 'A' || p.star === 'F') ? '#5a4a7a' : '#3f7a45';
-    if (d.Tsurf >= 320) { colA = '#6b4a2a'; colB = '#caa06a'; colC = '#caa06a'; colD = '#8a5a32'; colE = '#e6d7c0'; sea = 0.95; cloudAmt = 0.12; }
-    else if (d.Tsurf < 255) { colA = '#2a4a66'; colB = '#6f96b8'; colC = '#cfe0ef'; colD = '#e8f2fb'; colE = '#ffffff'; sea = 0.55; cloudAmt = 0.2; }
-    else { colA = '#0e2f4e'; colB = '#2f6fae'; colC = veg; colD = '#9c8a54'; colE = '#eef6ff'; sea = 0.62 - (p.water / 100) * 0.32; cloudAmt = Math.min(0.7, p.water / 100 * 0.45 + a.H2O / 100 * 1.2); }
+  if (type === 1) {                       // gas giant
+    const b = colormap(d.Tsurf);
+    colA = mix(b, '#000000', 0.4); colB = mix(b, '#ffffff', 0.3); colC = mix(b, '#ffffff', 0.5); colD = mix(b, '#ffffff', 0.7); colE = '#d9683a';
+    sea = 1; cloudAmt = 0; storm = 0.7; band = 12 + Math.min(10, 24 / Math.max(1, p.rotation) * 6); warp = 0.6; rimS = 0.5;
+  } else if (type === 2) {                // ice giant
+    const b = mix(colormap(d.Tsurf), '#3f93a6', 0.5);
+    colA = mix(b, '#000000', 0.4); colB = b; colC = mix(b, '#ffffff', 0.4); colD = mix(b, '#ffffff', 0.7); colE = '#ffffff';
+    sea = 0.6; cloudAmt = 0.2; storm = 0.4; band = 9; warp = 0.4; rimS = 0.6;
+  } else {                                // terrestrial / rocky
+    const base = surfaceBase(d.Tsurf, p.water, stripped);
+    colA = mix(base, '#06121f', 0.5);
+    colB = mix(base, '#000000', 0.15);
+    colC = stripped ? mix(base, '#000000', 0.1) : (p.star === 'M' ? '#5a2e2e' : (p.star === 'A' || p.star === 'F') ? '#5a4a7a' : mix(base, '#3f7a45', 0.5));
+    colD = mix(base, '#9c8a54', 0.4); colE = stripped ? '#bdbdbd' : '#eef6ff';
+    sea = stripped ? 1.0 : Math.max(0.2, 0.78 - (p.water / 100) * 0.5);
+    cloudAmt = stripped ? 0 : Math.min(0.75, p.water / 100 * 0.4 + a.H2O / tot * 1.5);
+    rimS = stripped ? 0.15 : 0.6;
   }
-  if (stripped) { type = 0; colA = '#3a3a3a'; colB = '#6e6e6e'; colC = '#7c7c7c'; colD = '#9a9a9a'; colE = '#bdbdbd'; sea = 1.0; cloudAmt = 0; rim = 0.15; }
-
   return {
-    uSunColor: star.sunColor, uAmbient: 0.05, uNightAmbient: stripped ? 0.01 : 0.02,
-    uSurfaceType: type, uYaw: 0.0, uCloudYaw: 0.6,
-    uColA: colA, uColB: colB, uColC: colC, uColD: colD, uColE: colE,
-    uCloudCol: cloudCol, uAtmoCol: atmoCol, uSeaLevel: sea, uCloudAmount: cloudAmt, uCloudSharp: 0.55,
-    uBandFreq: band, uWarp: warp, uStorm: storm, uBumpStrength: 1.2, uRimStrength: rim, uRAtmo: 1.05,
-    uLightDir: lightDir(112, 6),
+    uSunColor: star.sunColor, uAmbient: 0.05, uNightAmbient: stripped ? 0.01 : 0.02, uSurfaceType: type,
+    uColA: colA, uColB: colB, uColC: colC, uColD: colD, uColE: colE, uCloudCol: '#eef4ff',
+    uAtmoCol: rimColor(p, stripped), uSeaLevel: sea, uCloudAmount: cloudAmt, uCloudSharp: 0.55,
+    uBandFreq: band, uWarp: warp, uStorm: storm, uBumpStrength: 1.2, uRimStrength: rimS, uRAtmo: 1.05,
+    uLightDir: lightDir(112, 6), uSeed: planetSeed(p),
   };
 }
 
-// ---- CUTAWAY shader uniforms (sliced anatomy: crust/mantle/core) ----
+// ---- CUTAWAY shader uniforms (continuous core size + colours) ----
 export function cutawayUniforms(p, d) {
   const star = STARS[p.star] || STARS.G;
   const stripped = d.retention === 'stripped';
-  const key = selectArchetype(p, d);
-  const density = p.mass / Math.pow(p.radius, 3);            // Earth = 1
-  const coreFrac = Math.max(0.32, Math.min(0.6, 0.42 + (density - 1) * 0.06)); // denser → bigger core
-  const [surfA, surfB] = tempColors(d.Tsurf, p.water, stripped);
+  const density = p.mass / Math.pow(p.radius, 3);
+  const coreFrac = Math.max(0.30, Math.min(0.62, 0.40 + (density - 1) * 0.07));
+  const base = surfaceBase(d.Tsurf, p.water, stripped);
   return {
     uRAtmo: 1.06, uRSurface: 1.0, uRCrustBase: 0.86, uRMantleBase: coreFrac, uRInnerCore: coreFrac * 0.5,
     uCrustA: '#5a4a3a', uCrustB: '#8a7256', uMantleA: '#7a3a22', uMantleB: '#b25a2e',
-    uCoreCol: '#ff6a2a', uInnerCoreCol: '#ffe1a0', uSurfA: surfA, uSurfB: surfB,
-    uAtmoCol: stripped ? '#20303a' : (RIM[key] || '#8ab8ff'),
-    uCoreEmissive: 1.0 + Math.min(0.8, (p.mass - 1) * 0.05), uRimStrength: 0.5, uBoundaryGlow: 0.85,
-    uNightAmbient: 0.02, uSunColor: star.sunColor, uAmbient: 0.14, uLightDir: lightDir(120, 10),
+    uCoreCol: '#ff6a2a', uInnerCoreCol: '#ffe1a0', uSurfA: mix(base, '#ffffff', 0.25), uSurfB: mix(base, '#000000', 0.5),
+    uAtmoCol: rimColor(p, stripped), uCoreEmissive: 1.0 + Math.min(0.9, (p.mass - 1) * 0.05 + (density - 1) * 0.1),
+    uRimStrength: 0.5, uBoundaryGlow: 0.85, uNightAmbient: 0.02, uSunColor: star.sunColor, uAmbient: 0.14,
+    uLightDir: lightDir(120, 10), uSeed: planetSeed(p),
   };
 }

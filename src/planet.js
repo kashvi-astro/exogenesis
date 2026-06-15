@@ -26,6 +26,7 @@ function common() {
     uProjInv: { value: new THREE.Matrix4() },
     uLightDir: { value: V3() },
     uSunColor: { value: C('#ffffff') },
+    uSeed: { value: V3() },
   };
 }
 const UNIFORMS = {
@@ -68,6 +69,8 @@ export function initPlanet(container) {
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true; controls.minDistance = 1.15; controls.maxDistance = 12;
   controls.autoRotate = true; controls.autoRotateSpeed = 0.35;
+  const clock = new THREE.Clock();
+  let spin = 0.1; // radians/sec for the surface texture (set from rotation period)
 
   const tri = new THREE.BufferGeometry();
   tri.setAttribute('position', new THREE.BufferAttribute(new Float32Array([-1, -1, 0, 3, -1, 0, -1, 3, 0]), 3));
@@ -110,6 +113,12 @@ export function initPlanet(container) {
 
   renderer.setAnimationLoop(() => {
     controls.update();
+    const dt = clock.getDelta();
+    if (active === 'surface') {           // spin the surface texture (stars stay fixed)
+      const su = materials.surface.uniforms;
+      su.uYaw.value += spin * dt;
+      su.uCloudYaw.value += spin * 1.15 * dt;
+    }
     const u = materials[active].uniforms;
     camera.updateMatrixWorld();
     u.uCamWorld.value.copy(camera.matrixWorld);
@@ -122,11 +131,13 @@ export function initPlanet(container) {
     setView(name) {
       if (!materials[name]) return;
       active = name; quad.material = materials[name];
-      controls.autoRotate = name !== 'cutaway';   // hold still for the anatomy view
+      // surface spins via its texture (uYaw); atmosphere orbits the camera; cutaway holds still
+      controls.autoRotate = name === 'atmosphere';
       // bloom only on the atmosphere view; near-zero elsewhere → no white "fog"
       bloom.strength = name === 'atmosphere' ? 0.4 : 0.0;
       bloom.threshold = name === 'atmosphere' ? 1.0 : 1.6;
     },
+    setSpin(rate) { spin = rate; },
     apply(view, vals) {
       if (view !== active) this.setView(view);
       setVals(materials[active], vals);

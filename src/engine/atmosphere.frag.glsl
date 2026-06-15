@@ -27,6 +27,7 @@ uniform int   uSurfaceMode;    // 0 rocky, 1 banded gas, 2 smooth
 uniform vec3  uSurfColA;
 uniform vec3  uSurfColB;
 uniform float uNightAmbient;
+uniform vec3  uSeed;   // per-planet noise offset
 
 const float R_PLANET = 1.0;
 const float PI = 3.14159265359;
@@ -111,8 +112,8 @@ vec3 shadeSurface(vec3 p, vec3 rd) {
   if (uSurfaceMode == 0) {
     // rocky: domain-warped fbm continents + craters feel
     vec3 q = p * 4.0;
-    float w = fbm(q + 2.0 * fbm(q * 0.5));
-    float detail = fbm(q * 6.0);
+    float w = fbm(q + uSeed + 2.0 * fbm(q * 0.5 + uSeed));
+    float detail = fbm(q * 6.0 + uSeed);
     albedo = mix(uSurfColA, uSurfColB, smoothstep(0.35, 0.75, w));
     albedo *= 0.75 + 0.5 * detail;
     // cheap normal perturbation for terrain feel
@@ -124,15 +125,15 @@ vec3 shadeSurface(vec3 p, vec3 rd) {
   } else if (uSurfaceMode == 1) {
     // banded gas: latitude stripes warped by flow noise
     float lat = asin(clamp(p.y / length(p), -1.0, 1.0));
-    float warp = fbm(p * 3.0) * 0.35 + fbm(p * 9.0) * 0.12;
+    float warp = fbm(p * 3.0 + uSeed) * 0.35 + fbm(p * 9.0 + uSeed) * 0.12;
     float bands = sin(lat * 18.0 + warp * 14.0) * 0.5 + 0.5;
     bands = smoothstep(0.15, 0.85, bands);
     albedo = mix(uSurfColA, uSurfColB, bands);
-    float storm = smoothstep(0.62, 0.78, fbm(p * 5.0 + vec3(7.1)));
+    float storm = smoothstep(0.62, 0.78, fbm(p * 5.0 + uSeed + vec3(7.1)));
     albedo = mix(albedo, uSurfColB * 1.25, storm * 0.35);
   } else {
     // smooth haze ball: barely-there texture, atmosphere does the talking
-    float w = fbm(p * 3.0);
+    float w = fbm(p * 3.0 + uSeed);
     albedo = mix(uSurfColA, uSurfColB, w * 0.4);
   }
 

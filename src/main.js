@@ -90,6 +90,7 @@ function update() {
 
   // drive the planet from material tokens, for the current view
   planet.apply(currentView, VIEW_UNIFORMS[currentView](p, d));
+  planet.setSpin(Math.min(0.6, Math.max(0.02, 0.12 * 24 / p.rotation))); // rotation period → spin
   $('planetCap').textContent = captionFor(p, d);
 
   // planet data card
