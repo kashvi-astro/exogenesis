@@ -163,11 +163,30 @@ export function cutawayUniforms(p, d) {
   const stripped = d.retention === 'stripped';
   const density = p.mass / Math.pow(p.radius, 3);
   const coreFrac = Math.max(0.30, Math.min(0.62, 0.40 + (density - 1) * 0.07));
+  const type = bodyType(p, d);                 // match the other two views
   const base = surfaceBase(d.Tsurf, p.water, stripped);
+
+  // layer materials by body type (interior is a schematic, recoloured to fit)
+  let crustA, crustB, mantleA, mantleB, coreCol, innerCore, surfA, surfB, crustBase;
+  if (type === 1) {                            // gas giant: clouds → metallic hydrogen → hot core
+    const b = colormap(d.Tsurf);
+    surfA = mix(b, '#ffffff', 0.35); surfB = mix(b, '#000000', 0.35);
+    crustA = '#d8c4a0'; crustB = '#a98a64'; mantleA = '#34507a'; mantleB = '#6f8fc0';
+    coreCol = '#ff7a3a'; innerCore = '#ffe1a0'; crustBase = 0.78;
+  } else if (type === 2) {                     // ice giant: icy shell → water/ammonia mantle
+    const b = mix(colormap(d.Tsurf), '#3f93a6', 0.5);
+    surfA = mix(b, '#ffffff', 0.35); surfB = mix(b, '#000000', 0.35);
+    crustA = '#9fc6cf'; crustB = '#cfe9ef'; mantleA = '#2a6f86'; mantleB = '#4f9fb0';
+    coreCol = '#c25a3a'; innerCore = '#ffd9a0'; crustBase = 0.80;
+  } else {                                     // terrestrial / rocky
+    surfA = mix(base, '#ffffff', 0.25); surfB = mix(base, '#000000', 0.5);
+    crustA = '#5a4a3a'; crustB = '#8a7256'; mantleA = '#7a3a22'; mantleB = '#b25a2e';
+    coreCol = '#ff6a2a'; innerCore = '#ffe1a0'; crustBase = 0.86;
+  }
   return {
-    uRAtmo: 1.06, uRSurface: 1.0, uRCrustBase: 0.86, uRMantleBase: coreFrac, uRInnerCore: coreFrac * 0.5,
-    uCrustA: '#5a4a3a', uCrustB: '#8a7256', uMantleA: '#7a3a22', uMantleB: '#b25a2e',
-    uCoreCol: '#ff6a2a', uInnerCoreCol: '#ffe1a0', uSurfA: mix(base, '#ffffff', 0.25), uSurfB: mix(base, '#000000', 0.5),
+    uRAtmo: 1.06, uRSurface: 1.0, uRCrustBase: crustBase, uRMantleBase: coreFrac, uRInnerCore: coreFrac * 0.5,
+    uCrustA: crustA, uCrustB: crustB, uMantleA: mantleA, uMantleB: mantleB,
+    uCoreCol: coreCol, uInnerCoreCol: innerCore, uSurfA: surfA, uSurfB: surfB,
     uAtmoCol: rimColor(p, stripped), uCoreEmissive: 1.0 + Math.min(0.9, (p.mass - 1) * 0.05 + (density - 1) * 0.1),
     uRimStrength: 0.5, uBoundaryGlow: 0.85, uNightAmbient: 0.02, uSunColor: star.sunColor, uAmbient: 0.14,
     uLightDir: lightDir(120, 10), uSeed: planetSeed(p),

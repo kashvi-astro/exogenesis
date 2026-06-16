@@ -135,6 +135,10 @@ export function initPlanet(container) {
     setView(name) {
       if (!materials[name]) return;
       active = name; quad.material = materials[name];
+      // frame the cut opening (+x,+z wedge) for cutaway; front-on for the others
+      if (name === 'cutaway') camera.position.set(1.75, 0.95, 1.75);
+      else camera.position.set(-0.55, 0.4, 3.2);
+      controls.update();
       // surface spins via its texture (uYaw); atmosphere orbits the camera; cutaway holds still
       controls.autoRotate = name === 'atmosphere';
       // bloom only on the atmosphere view; near-zero elsewhere → no white "fog"
